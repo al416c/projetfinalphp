@@ -1,58 +1,21 @@
-# MonShop - Site E-Commerce PHP
+# NOVA — Premium Tech Marketplace
 
-Site e-commerce développé en PHP avec MySQL.
-
-## Fonctionnalités
-
-- Catalogue de produits avec catégories
-- Système de recherche
-- Panier d'achat
-- Gestion des utilisateurs (inscription/connexion)
-- Passage de commande
-- Historique des commandes
-- Panel d'administration complet
+Un marketplace e-commerce premium en PHP natif avec un design Apple-like.
 
 ## Installation
 
-1. Importer la base de données :
-```sql
-mysql -u root -p < sql/database.sql
-```
+1. Importer la base de données : `mysql -u root < sql/database.sql`
+2. Configurer `config/database.php` si besoin
+3. Accéder via `http://localhost/projetfinalphp`
 
-2. Configurer la connexion dans `config/database.php`
+## Comptes de test
 
-3. Lancer un serveur PHP :
-```bash
-php -S localhost:8000
-```
+| Utilisateur | Email | Mot de passe | Role |
+|---|---|---|---|
+| admin | admin@nova.fr | password | Admin |
+| alice_tech | alice@nova.fr | password | User |
+| bob_audio | bob@nova.fr | password | User |
 
-4. Accéder au site : http://localhost:8000
+## Stack
 
-## Compte admin par défaut
-
-- Email : admin@monshop.com
-- Mot de passe : password
-
-## Structure du projet
-
-```
-├── admin/              # Panel d'administration
-├── ajax/               # Requêtes AJAX (panier)
-├── assets/
-│   ├── css/           # Styles CSS
-│   └── js/            # Scripts JavaScript
-├── config/            # Configuration
-├── includes/          # Header/Footer
-├── sql/               # Script SQL
-├── uploads/           # Images uploadées
-│   ├── produits/
-│   └── categories/
-└── *.php              # Pages du site
-```
-
-## Technologies
-
-- PHP 7.4+
-- MySQL
-- Bootstrap 5
-- Font Awesome
+PHP natif + MySQL/PDO + CSS custom + JS vanilla + Bootstrap Icons

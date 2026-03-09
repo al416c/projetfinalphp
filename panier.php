@@ -1,102 +1,127 @@
 <?php
 require_once 'config/init.php';
+$pageTitle = 'Panier';
 
-$pageTitle = 'Panier - ' . SITE_NAME;
-
+// Fetch cart items
 if (isLoggedIn()) {
-    $stmt = $pdo->prepare("SELECT pa.*, p.nom, p.prix, p.image, p.stock FROM panier pa JOIN produits p ON pa.produit_id = p.id WHERE pa.user_id = ?");
+    $stmt = $pdo->prepare("
+        SELECT p.*, a.nom, a.prix, a.image, s.quantite as stock, u.username as auteur_nom
+        FROM panier p
+        JOIN articles a ON p.article_id = a.id
+        LEFT JOIN stock s ON a.id = s.article_id
+        LEFT JOIN users u ON a.auteur_id = u.id
+        WHERE p.user_id = ?
+        ORDER BY p.date_ajout DESC
+    ");
     $stmt->execute([$_SESSION['user_id']]);
 } else {
-    $stmt = $pdo->prepare("SELECT pa.*, p.nom, p.prix, p.image, p.stock FROM panier pa JOIN produits p ON pa.produit_id = p.id WHERE pa.session_id = ?");
+    $stmt = $pdo->prepare("
+        SELECT p.*, a.nom, a.prix, a.image, s.quantite as stock, u.username as auteur_nom
+        FROM panier p
+        JOIN articles a ON p.article_id = a.id
+        LEFT JOIN stock s ON a.id = s.article_id
+        LEFT JOIN users u ON a.auteur_id = u.id
+        WHERE p.session_id = ?
+        ORDER BY p.date_ajout DESC
+    ");
     $stmt->execute([session_id()]);
 }
 $items = $stmt->fetchAll();
 
-$total = 0;
+$subtotal = 0;
 foreach ($items as $item) {
-    $total += $item['prix'] * $item['quantite'];
+    $subtotal += $item['prix'] * $item['quantite'];
 }
 
 require_once 'includes/header.php';
 ?>
 
-<div class="container">
-    <h1 class="mb-4">Mon panier</h1>
+<div class="page-hero">
+    <div class="container">
+        <h1 class="fade-in">Votre panier</h1>
+        <p class="fade-in"><?= count($items) ?> article<?= count($items) > 1 ? 's' : '' ?></p>
+    </div>
+</div>
 
+<div class="container-wide">
     <?php if (empty($items)): ?>
-        <div class="alert alert-info">
-            Votre panier est vide. <a href="produits.php">Continuer mes achats</a>
+        <div class="empty-state fade-in">
+            <i class="bi bi-bag"></i>
+            <h3>Votre panier est vide</h3>
+            <p>Découvrez nos articles et ajoutez vos favoris au panier.</p>
+            <a href="produits.php" class="btn btn-primary">Explorer les articles</a>
         </div>
     <?php else: ?>
-        <div class="row">
-            <div class="col-md-8">
-                <div class="card">
-                    <div class="card-body">
-                        <?php foreach ($items as $item): ?>
-                        <div class="cart-item d-flex align-items-center">
-                            <div class="flex-shrink-0" style="width: 100px;">
-                                <?php if ($item['image']): ?>
-                                    <img src="uploads/produits/<?= $item['image'] ?>" class="img-fluid rounded" alt="<?= htmlspecialchars($item['nom']) ?>">
-                                <?php else: ?>
-                                    <div class="img-placeholder rounded" style="height:80px;"><i class="fas fa-image"></i></div>
-                                <?php endif; ?>
+        <div class="cart-layout">
+            <!-- Cart items -->
+            <div class="fade-in">
+                <?php foreach ($items as $item): ?>
+                <div class="cart-item">
+                    <a href="produit.php?id=<?= $item['article_id'] ?>">
+                        <?php if ($item['image'] && file_exists("uploads/produits/{$item['image']}")): ?>
+                            <img src="uploads/produits/<?= sanitize($item['image']) ?>" alt="<?= sanitize($item['nom']) ?>">
+                        <?php else: ?>
+                            <div style="width: 100px; height: 100px; background: var(--bg-secondary); border-radius: var(--radius-sm); display: flex; align-items: center; justify-content: center;">
+                                <i class="bi bi-box-seam" style="color: var(--text-tertiary);"></i>
                             </div>
-                            <div class="flex-grow-1 ms-3">
-                                <h5 class="mb-1">
-                                    <a href="produit.php?id=<?= $item['produit_id'] ?>" class="text-decoration-none">
-                                        <?= htmlspecialchars($item['nom']) ?>
-                                    </a>
-                                </h5>
-                                <p class="text-muted mb-1"><?= number_format($item['prix'], 2, ',', ' ') ?> € / unité</p>
-                                <div class="d-flex align-items-center">
-                                    <input type="number" class="form-control quantity-change quantity-input" 
-                                           data-id="<?= $item['id'] ?>" 
-                                           value="<?= $item['quantite'] ?>" 
-                                           min="1" 
-                                           max="<?= $item['stock'] ?>">
-                                    <button class="btn btn-outline-danger btn-sm ms-2 delete-cart-item" data-id="<?= $item['id'] ?>">
-                                        <i class="fas fa-trash"></i>
-                                    </button>
-                                </div>
-                            </div>
-                            <div class="text-end">
-                                <strong><?= number_format($item['prix'] * $item['quantite'], 2, ',', ' ') ?> €</strong>
-                            </div>
+                        <?php endif; ?>
+                    </a>
+                    <div class="cart-item-info">
+                        <h3><a href="produit.php?id=<?= $item['article_id'] ?>" style="color: inherit; text-decoration: none;"><?= sanitize($item['nom']) ?></a></h3>
+                        <p class="caption">Vendu par <?= sanitize($item['auteur_nom']) ?></p>
+                        <p class="price"><?= formatPrice($item['prix']) ?></p>
+                    </div>
+                    <div class="cart-item-actions">
+                        <div class="quantity-selector">
+                            <button class="cart-qty-btn" data-id="<?= $item['id'] ?>" data-action="decrease" type="button">−</button>
+                            <input type="text" value="<?= $item['quantite'] ?>" readonly>
+                            <button class="cart-qty-btn" data-id="<?= $item['id'] ?>" data-action="increase" type="button">+</button>
                         </div>
-                        <?php endforeach; ?>
+                        <button class="btn-icon sm cart-delete-btn" data-id="<?= $item['id'] ?>" style="background: rgba(255,69,58,0.1); color: var(--danger); border: none; cursor: pointer;">
+                            <i class="bi bi-trash3"></i>
+                        </button>
                     </div>
                 </div>
+                <?php endforeach; ?>
             </div>
 
-            <div class="col-md-4">
-                <div class="order-summary">
-                    <h5 class="mb-3">Récapitulatif</h5>
-                    <div class="d-flex justify-content-between mb-2">
-                        <span>Sous-total</span>
-                        <span><?= number_format($total, 2, ',', ' ') ?> €</span>
-                    </div>
-                    <div class="d-flex justify-content-between mb-2">
-                        <span>Livraison</span>
-                        <span><?= $total >= 50 ? 'Gratuite' : '5,00 €' ?></span>
-                    </div>
-                    <hr>
-                    <div class="d-flex justify-content-between mb-3">
-                        <strong>Total</strong>
-                        <strong><?= number_format($total < 50 ? $total + 5 : $total, 2, ',', ' ') ?> €</strong>
-                    </div>
-                    <?php if ($total < 50): ?>
-                        <p class="small text-muted">Plus que <?= number_format(50 - $total, 2, ',', ' ') ?> € pour la livraison gratuite !</p>
-                    <?php endif; ?>
-                    <?php if (isLoggedIn()): ?>
-                        <a href="checkout.php" class="btn btn-primary w-100">Commander</a>
-                    <?php else: ?>
-                        <a href="connexion.php" class="btn btn-primary w-100">Se connecter pour commander</a>
-                    <?php endif; ?>
-                    <a href="produits.php" class="btn btn-outline-secondary w-100 mt-2">Continuer mes achats</a>
+            <!-- Summary -->
+            <div class="cart-summary fade-in">
+                <h3>Résumé</h3>
+                <div class="cart-summary-row">
+                    <span>Sous-total</span>
+                    <span><?= formatPrice($subtotal) ?></span>
                 </div>
+                <div class="cart-summary-row">
+                    <span>Livraison</span>
+                    <span style="color: var(--success);">Gratuit</span>
+                </div>
+                <div class="cart-summary-row total">
+                    <span>Total</span>
+                    <span><?= formatPrice($subtotal) ?></span>
+                </div>
+
+                <?php if (isLoggedIn()): ?>
+                    <?php $balance = getUserBalance(); ?>
+                    <div style="padding: 12px 0; font-size: 14px; color: var(--text-secondary); border-top: 1px solid rgba(0,0,0,0.06); margin-top: 8px;">
+                        Votre solde : <strong style="color: <?= $balance >= $subtotal ? 'var(--success)' : 'var(--danger)' ?>;"><?= formatPrice($balance) ?></strong>
+                    </div>
+                    <?php if ($balance >= $subtotal): ?>
+                        <a href="checkout.php" class="btn btn-primary">Commander</a>
+                    <?php else: ?>
+                        <p style="font-size: 14px; color: var(--danger); text-align: center; margin-top: 12px;">
+                            Solde insuffisant. <a href="compte.php?tab=balance">Recharger</a>
+                        </p>
+                        <a href="checkout.php" class="btn btn-primary" style="opacity: 0.5; pointer-events: none;">Commander</a>
+                    <?php endif; ?>
+                <?php else: ?>
+                    <a href="connexion.php" class="btn btn-primary">Se connecter pour commander</a>
+                <?php endif; ?>
             </div>
         </div>
     <?php endif; ?>
 </div>
+
+<div style="height: 80px;"></div>
 
 <?php require_once 'includes/footer.php'; ?>

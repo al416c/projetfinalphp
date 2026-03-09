@@ -1,130 +1,111 @@
 <?php
 require_once 'config/init.php';
+$pageTitle = 'Inscription';
 
-if (isLoggedIn()) {
-    redirect('index.php');
-}
+if (isLoggedIn()) redirect('compte.php');
 
-$pageTitle = 'Inscription - ' . SITE_NAME;
 $errors = [];
-$success = false;
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-    $nom = sanitize($_POST['nom'] ?? '');
-    $prenom = sanitize($_POST['prenom'] ?? '');
+    $username = sanitize($_POST['username'] ?? '');
     $email = sanitize($_POST['email'] ?? '');
     $password = $_POST['password'] ?? '';
     $password_confirm = $_POST['password_confirm'] ?? '';
-    $adresse = sanitize($_POST['adresse'] ?? '');
-    $telephone = sanitize($_POST['telephone'] ?? '');
 
-    if (empty($nom)) {
-        $errors[] = "Le nom est requis.";
+    if (empty($username) || empty($email) || empty($password)) {
+        $errors[] = 'Tous les champs sont requis.';
     }
-    if (empty($prenom)) {
-        $errors[] = "Le prénom est requis.";
+    if (strlen($username) < 3) {
+        $errors[] = 'Le nom d\'utilisateur doit contenir au moins 3 caractères.';
     }
-    if (empty($email) || !filter_var($email, FILTER_VALIDATE_EMAIL)) {
-        $errors[] = "Email invalide.";
+    if (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
+        $errors[] = 'Email invalide.';
     }
     if (strlen($password) < 6) {
-        $errors[] = "Le mot de passe doit contenir au moins 6 caractères.";
+        $errors[] = 'Le mot de passe doit contenir au moins 6 caractères.';
     }
     if ($password !== $password_confirm) {
-        $errors[] = "Les mots de passe ne correspondent pas.";
+        $errors[] = 'Les mots de passe ne correspondent pas.';
     }
 
+    // Check unique username
     if (empty($errors)) {
-        $stmt = $pdo->prepare("SELECT id FROM users WHERE email = ?");
+        $stmt = $pdo->prepare("SELECT COUNT(*) FROM users WHERE username = ?");
+        $stmt->execute([$username]);
+        if ($stmt->fetchColumn() > 0) {
+            $errors[] = 'Ce nom d\'utilisateur est déjà pris.';
+        }
+    }
+
+    // Check unique email
+    if (empty($errors)) {
+        $stmt = $pdo->prepare("SELECT COUNT(*) FROM users WHERE email = ?");
         $stmt->execute([$email]);
-        if ($stmt->fetch()) {
-            $errors[] = "Cet email est déjà utilisé.";
+        if ($stmt->fetchColumn() > 0) {
+            $errors[] = 'Cet email est déjà utilisé.';
         }
     }
 
     if (empty($errors)) {
         $hashedPassword = password_hash($password, PASSWORD_DEFAULT);
-        $stmt = $pdo->prepare("INSERT INTO users (nom, prenom, email, password, adresse, telephone) VALUES (?, ?, ?, ?, ?, ?)");
-        
-        if ($stmt->execute([$nom, $prenom, $email, $hashedPassword, $adresse, $telephone])) {
-            $success = true;
-        } else {
-            $errors[] = "Une erreur est survenue lors de l'inscription.";
-        }
+        $stmt = $pdo->prepare("INSERT INTO users (username, email, password) VALUES (?, ?, ?)");
+        $stmt->execute([$username, $email, $hashedPassword]);
+
+        $userId = $pdo->lastInsertId();
+
+        // Auto-login after registration (per PDF requirement)
+        $_SESSION['user_id'] = $userId;
+        $_SESSION['username'] = $username;
+        $_SESSION['user_role'] = 'user';
+
+        // Transfer session cart
+        $stmtTransfer = $pdo->prepare("UPDATE panier SET user_id = ?, session_id = NULL WHERE session_id = ?");
+        $stmtTransfer->execute([$userId, session_id()]);
+
+        setFlash('success', 'Bienvenue sur NOVA, ' . $username . ' ! Votre compte a été créé avec un solde de 500,00 €.');
+        redirect('index.php');
     }
 }
 
 require_once 'includes/header.php';
 ?>
 
-<div class="container">
-    <div class="row justify-content-center">
-        <div class="col-md-6">
-            <div class="card">
-                <div class="card-header">
-                    <h4 class="mb-0">Inscription</h4>
-                </div>
-                <div class="card-body">
-                    <?php if ($success): ?>
-                        <div class="alert alert-success">
-                            Inscription réussie ! <a href="connexion.php">Connectez-vous</a>
-                        </div>
-                    <?php else: ?>
-                        <?php if (!empty($errors)): ?>
-                            <div class="alert alert-danger">
-                                <ul class="mb-0">
-                                    <?php foreach ($errors as $error): ?>
-                                        <li><?= $error ?></li>
-                                    <?php endforeach; ?>
-                                </ul>
-                            </div>
-                        <?php endif; ?>
+<section class="section-alt" style="min-height: calc(100vh - var(--nav-height)); display: flex; align-items: center;">
+    <div class="container">
+        <div class="form-card fade-in">
+            <h2>Créer un compte</h2>
+            <p class="form-subtitle">Rejoignez la communauté NOVA.</p>
 
-                        <form method="POST">
-                            <div class="row">
-                                <div class="col-md-6 mb-3">
-                                    <label class="form-label">Nom</label>
-                                    <input type="text" name="nom" class="form-control" value="<?= htmlspecialchars($_POST['nom'] ?? '') ?>" required>
-                                </div>
-                                <div class="col-md-6 mb-3">
-                                    <label class="form-label">Prénom</label>
-                                    <input type="text" name="prenom" class="form-control" value="<?= htmlspecialchars($_POST['prenom'] ?? '') ?>" required>
-                                </div>
-                            </div>
-                            <div class="mb-3">
-                                <label class="form-label">Email</label>
-                                <input type="email" name="email" class="form-control" value="<?= htmlspecialchars($_POST['email'] ?? '') ?>" required>
-                            </div>
-                            <div class="row">
-                                <div class="col-md-6 mb-3">
-                                    <label class="form-label">Mot de passe</label>
-                                    <input type="password" name="password" class="form-control" required>
-                                </div>
-                                <div class="col-md-6 mb-3">
-                                    <label class="form-label">Confirmer le mot de passe</label>
-                                    <input type="password" name="password_confirm" class="form-control" required>
-                                </div>
-                            </div>
-                            <div class="mb-3">
-                                <label class="form-label">Adresse</label>
-                                <textarea name="adresse" class="form-control" rows="2"><?= htmlspecialchars($_POST['adresse'] ?? '') ?></textarea>
-                            </div>
-                            <div class="mb-3">
-                                <label class="form-label">Téléphone</label>
-                                <input type="tel" name="telephone" class="form-control" value="<?= htmlspecialchars($_POST['telephone'] ?? '') ?>">
-                            </div>
-                            <button type="submit" class="btn btn-primary w-100">S'inscrire</button>
-                        </form>
-
-                        <hr>
-                        <p class="text-center mb-0">
-                            Déjà un compte ? <a href="connexion.php">Connectez-vous</a>
-                        </p>
-                    <?php endif; ?>
+            <?php if ($errors): ?>
+                <div class="flash flash-error" style="position: static; animation: none; margin-bottom: 20px;">
+                    <?= implode('<br>', array_map('sanitize', $errors)) ?>
                 </div>
-            </div>
+            <?php endif; ?>
+
+            <form method="POST">
+                <div class="form-group">
+                    <label class="form-label">Nom d'utilisateur</label>
+                    <input type="text" name="username" class="form-control" placeholder="alex_tech" value="<?= sanitize($username ?? '') ?>" required>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Email</label>
+                    <input type="email" name="email" class="form-control" placeholder="votre@email.com" value="<?= sanitize($email ?? '') ?>" required>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Mot de passe</label>
+                    <input type="password" name="password" class="form-control" placeholder="Minimum 6 caractères" required>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Confirmer le mot de passe</label>
+                    <input type="password" name="password_confirm" class="form-control" placeholder="••••••••" required>
+                </div>
+                <button type="submit" class="btn btn-primary">Créer mon compte</button>
+            </form>
+            <p class="form-footer">
+                Déjà un compte ? <a href="connexion.php">Se connecter</a>
+            </p>
         </div>
     </div>
-</div>
+</section>
 
 <?php require_once 'includes/footer.php'; ?>

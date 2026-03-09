@@ -1,43 +1,51 @@
 <?php
 require_once 'config/init.php';
+$pageTitle = 'Validation de commande';
 
-if (!isLoggedIn()) {
-    redirect('connexion.php');
-}
+if (!isLoggedIn()) redirect('connexion.php');
 
-$stmt = $pdo->prepare("SELECT pa.*, p.nom, p.prix, p.image, p.stock FROM panier pa JOIN produits p ON pa.produit_id = p.id WHERE pa.user_id = ?");
+// Fetch cart items
+$stmt = $pdo->prepare("
+    SELECT p.*, a.nom, a.prix, a.image, s.quantite as stock
+    FROM panier p
+    JOIN articles a ON p.article_id = a.id
+    LEFT JOIN stock s ON a.id = s.article_id
+    WHERE p.user_id = ?
+");
 $stmt->execute([$_SESSION['user_id']]);
 $items = $stmt->fetchAll();
 
 if (empty($items)) {
+    setFlash('error', 'Votre panier est vide.');
     redirect('panier.php');
 }
 
-$subtotal = 0;
+$total = 0;
 foreach ($items as $item) {
-    $subtotal += $item['prix'] * $item['quantite'];
+    $total += $item['prix'] * $item['quantite'];
 }
-$shipping = $subtotal >= 50 ? 0 : 5;
-$total = $subtotal + $shipping;
 
-$pageTitle = 'Finaliser la commande - ' . SITE_NAME;
-
-$stmt = $pdo->prepare("SELECT * FROM users WHERE id = ?");
-$stmt->execute([$_SESSION['user_id']]);
-$user = $stmt->fetch();
-
+$balance = getUserBalance();
 $errors = [];
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $adresse = sanitize($_POST['adresse'] ?? '');
+    $ville = sanitize($_POST['ville'] ?? '');
+    $code_postal = sanitize($_POST['code_postal'] ?? '');
 
-    if (empty($adresse)) {
-        $errors[] = "L'adresse de livraison est requise.";
+    if (empty($adresse) || empty($ville) || empty($code_postal)) {
+        $errors[] = 'Tous les champs sont requis.';
     }
 
+    // Re-check balance
+    if ($balance < $total) {
+        $errors[] = 'Solde insuffisant.';
+    }
+
+    // Check stock availability
     foreach ($items as $item) {
         if ($item['quantite'] > $item['stock']) {
-            $errors[] = "Stock insuffisant pour " . $item['nom'];
+            $errors[] = "Stock insuffisant pour " . $item['nom'] . ".";
         }
     }
 
@@ -45,27 +53,53 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         try {
             $pdo->beginTransaction();
 
-            $stmt = $pdo->prepare("INSERT INTO commandes (user_id, total, adresse_livraison, statut) VALUES (?, ?, ?, 'en_attente')");
-            $stmt->execute([$_SESSION['user_id'], $total, $adresse]);
-            $commandeId = $pdo->lastInsertId();
+            // Deduct balance
+            $stmtBalance = $pdo->prepare("UPDATE users SET balance = balance - ? WHERE id = ? AND balance >= ?");
+            $stmtBalance->execute([$total, $_SESSION['user_id'], $total]);
 
-            foreach ($items as $item) {
-                $stmt = $pdo->prepare("INSERT INTO commande_details (commande_id, produit_id, quantite, prix_unitaire) VALUES (?, ?, ?, ?)");
-                $stmt->execute([$commandeId, $item['produit_id'], $item['quantite'], $item['prix']]);
-
-                $stmt = $pdo->prepare("UPDATE produits SET stock = stock - ? WHERE id = ?");
-                $stmt->execute([$item['quantite'], $item['produit_id']]);
+            if ($stmtBalance->rowCount() === 0) {
+                throw new Exception('Solde insuffisant.');
             }
 
-            $stmt = $pdo->prepare("DELETE FROM panier WHERE user_id = ?");
-            $stmt->execute([$_SESSION['user_id']]);
+            // Credit sellers
+            foreach ($items as $item) {
+                $stmtArticle = $pdo->prepare("SELECT auteur_id FROM articles WHERE id = ?");
+                $stmtArticle->execute([$item['article_id']]);
+                $auteurId = $stmtArticle->fetchColumn();
+
+                if ($auteurId) {
+                    $itemTotal = $item['prix'] * $item['quantite'];
+                    $stmtCredit = $pdo->prepare("UPDATE users SET balance = balance + ? WHERE id = ?");
+                    $stmtCredit->execute([$itemTotal, $auteurId]);
+                }
+            }
+
+            // Create invoice
+            $stmtFacture = $pdo->prepare("INSERT INTO factures (user_id, montant, adresse, ville, code_postal) VALUES (?, ?, ?, ?, ?)");
+            $stmtFacture->execute([$_SESSION['user_id'], $total, $adresse, $ville, $code_postal]);
+            $factureId = $pdo->lastInsertId();
+
+            // Create invoice details + decrement stock
+            foreach ($items as $item) {
+                $stmtDetail = $pdo->prepare("INSERT INTO facture_details (facture_id, article_id, quantite, prix_unitaire) VALUES (?, ?, ?, ?)");
+                $stmtDetail->execute([$factureId, $item['article_id'], $item['quantite'], $item['prix']]);
+
+                $stmtStock = $pdo->prepare("UPDATE stock SET quantite = quantite - ? WHERE article_id = ? AND quantite >= ?");
+                $stmtStock->execute([$item['quantite'], $item['article_id'], $item['quantite']]);
+            }
+
+            // Clear cart
+            $stmtClear = $pdo->prepare("DELETE FROM panier WHERE user_id = ?");
+            $stmtClear->execute([$_SESSION['user_id']]);
 
             $pdo->commit();
 
-            redirect('confirmation.php?id=' . $commandeId);
+            $_SESSION['last_facture_id'] = $factureId;
+            redirect('confirmation.php');
+
         } catch (Exception $e) {
             $pdo->rollBack();
-            $errors[] = "Une erreur est survenue lors de la commande.";
+            $errors[] = 'Erreur lors de la commande : ' . $e->getMessage();
         }
     }
 }
@@ -73,69 +107,92 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 require_once 'includes/header.php';
 ?>
 
-<div class="container">
-    <h1 class="mb-4">Finaliser la commande</h1>
+<div class="page-hero">
+    <div class="container">
+        <h1 class="fade-in">Finaliser la commande</h1>
+        <p class="fade-in">Vérifiez vos articles et entrez votre adresse de facturation.</p>
+    </div>
+</div>
 
-    <?php if (!empty($errors)): ?>
-        <div class="alert alert-danger">
-            <ul class="mb-0">
-                <?php foreach ($errors as $error): ?>
-                    <li><?= $error ?></li>
-                <?php endforeach; ?>
-            </ul>
+<div class="container-wide">
+    <?php if ($errors): ?>
+        <div class="flash flash-error" style="position: static; animation: none; margin: 24px 0;">
+            <?= implode('<br>', array_map('sanitize', $errors)) ?>
         </div>
     <?php endif; ?>
 
-    <div class="row">
-        <div class="col-md-7">
-            <div class="card mb-4">
-                <div class="card-header">
-                    <h5 class="mb-0">Adresse de livraison</h5>
+    <div class="checkout-layout">
+        <!-- Billing form -->
+        <div class="fade-in">
+            <h2 class="headline-4 mb-4">Adresse de facturation</h2>
+            <form method="POST">
+                <div class="form-group">
+                    <label class="form-label">Adresse</label>
+                    <input type="text" name="adresse" class="form-control" placeholder="123 Rue de la Tech" value="<?= sanitize($adresse ?? '') ?>" required>
                 </div>
-                <div class="card-body">
-                    <form method="POST" id="checkout-form">
-                        <div class="mb-3">
-                            <label class="form-label">Adresse complète</label>
-                            <textarea name="adresse" class="form-control" rows="3" required><?= htmlspecialchars($user['adresse'] ?? '') ?></textarea>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label class="form-label">Ville</label>
+                        <input type="text" name="ville" class="form-control" placeholder="Paris" value="<?= sanitize($ville ?? '') ?>" required>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Code postal</label>
+                        <input type="text" name="code_postal" class="form-control" placeholder="75001" value="<?= sanitize($code_postal ?? '') ?>" required>
+                    </div>
+                </div>
+
+                <div class="divider"></div>
+
+                <h2 class="headline-4 mb-3">Récapitulatif</h2>
+                <?php foreach ($items as $item): ?>
+                <div style="display: flex; align-items: center; gap: 16px; padding: 12px 0; border-bottom: 1px solid rgba(0,0,0,0.04);">
+                    <?php if ($item['image'] && file_exists("uploads/produits/{$item['image']}")): ?>
+                        <img src="uploads/produits/<?= sanitize($item['image']) ?>" alt="" style="width: 60px; height: 60px; border-radius: 10px; object-fit: cover;">
+                    <?php else: ?>
+                        <div style="width: 60px; height: 60px; background: var(--bg-secondary); border-radius: 10px; display: flex; align-items: center; justify-content: center;">
+                            <i class="bi bi-box-seam" style="color: var(--text-tertiary);"></i>
                         </div>
-                        <button type="submit" class="btn btn-primary btn-lg w-100">
-                            <i class="fas fa-lock"></i> Confirmer la commande
-                        </button>
-                    </form>
+                    <?php endif; ?>
+                    <div style="flex: 1;">
+                        <strong style="font-size: 15px;"><?= sanitize($item['nom']) ?></strong>
+                        <p class="caption">Qté: <?= $item['quantite'] ?></p>
+                    </div>
+                    <span style="font-weight: 600;"><?= formatPrice($item['prix'] * $item['quantite']) ?></span>
                 </div>
-            </div>
+                <?php endforeach; ?>
+
+                <button type="submit" class="btn btn-primary btn-lg w-100 mt-4">
+                    Payer <?= formatPrice($total) ?>
+                </button>
+            </form>
         </div>
 
-        <div class="col-md-5">
-            <div class="card">
-                <div class="card-header">
-                    <h5 class="mb-0">Récapitulatif</h5>
-                </div>
-                <div class="card-body">
-                    <?php foreach ($items as $item): ?>
-                    <div class="d-flex justify-content-between mb-2">
-                        <span><?= htmlspecialchars($item['nom']) ?> x<?= $item['quantite'] ?></span>
-                        <span><?= number_format($item['prix'] * $item['quantite'], 2, ',', ' ') ?> €</span>
-                    </div>
-                    <?php endforeach; ?>
-                    <hr>
-                    <div class="d-flex justify-content-between mb-2">
-                        <span>Sous-total</span>
-                        <span><?= number_format($subtotal, 2, ',', ' ') ?> €</span>
-                    </div>
-                    <div class="d-flex justify-content-between mb-2">
-                        <span>Livraison</span>
-                        <span><?= $shipping > 0 ? number_format($shipping, 2, ',', ' ') . ' €' : 'Gratuite' ?></span>
-                    </div>
-                    <hr>
-                    <div class="d-flex justify-content-between">
-                        <strong>Total</strong>
-                        <strong class="text-primary"><?= number_format($total, 2, ',', ' ') ?> €</strong>
-                    </div>
-                </div>
+        <!-- Order summary sidebar -->
+        <div class="cart-summary fade-in">
+            <h3>Votre commande</h3>
+            <div class="cart-summary-row">
+                <span>Articles (<?= count($items) ?>)</span>
+                <span><?= formatPrice($total) ?></span>
+            </div>
+            <div class="cart-summary-row">
+                <span>Livraison</span>
+                <span style="color: var(--success);">Gratuit</span>
+            </div>
+            <div class="cart-summary-row total">
+                <span>Total</span>
+                <span><?= formatPrice($total) ?></span>
+            </div>
+            <div class="divider"></div>
+            <div style="text-align: center;">
+                <p class="caption">Votre solde après achat</p>
+                <p style="font-size: 24px; font-weight: 700; color: <?= ($balance - $total) >= 0 ? 'var(--success)' : 'var(--danger)' ?>;">
+                    <?= formatPrice($balance - $total) ?>
+                </p>
             </div>
         </div>
     </div>
 </div>
+
+<div style="height: 80px;"></div>
 
 <?php require_once 'includes/footer.php'; ?>

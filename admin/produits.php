@@ -5,105 +5,137 @@ if (!isAdmin()) {
     redirect('../connexion.php');
 }
 
-$pageTitle = 'Gestion des produits - ' . SITE_NAME;
+$pageTitle = 'Gestion des articles';
 
+// Delete article
 if (isset($_GET['delete'])) {
-    $stmt = $pdo->prepare("DELETE FROM produits WHERE id = ?");
-    $stmt->execute([$_GET['delete']]);
+    $id = (int) $_GET['delete'];
+    // Delete related data first
+    $pdo->prepare("DELETE FROM facture_details WHERE article_id = ?")->execute([$id]);
+    $pdo->prepare("DELETE FROM commentaires WHERE article_id = ?")->execute([$id]);
+    $pdo->prepare("DELETE FROM favoris WHERE article_id = ?")->execute([$id]);
+    $pdo->prepare("DELETE FROM panier WHERE article_id = ?")->execute([$id]);
+    $pdo->prepare("DELETE FROM stock WHERE article_id = ?")->execute([$id]);
+    
+    // Get image to delete
+    $stmt = $pdo->prepare("SELECT image FROM articles WHERE id = ?");
+    $stmt->execute([$id]);
+    $article = $stmt->fetch();
+    if ($article && $article['image']) {
+        $imgPath = UPLOAD_DIR . 'produits/' . $article['image'];
+        if (file_exists($imgPath)) unlink($imgPath);
+    }
+    
+    $pdo->prepare("DELETE FROM articles WHERE id = ?")->execute([$id]);
+    setFlash('success', 'Article supprimé avec succès.');
     redirect('produits.php');
 }
 
-$stmt = $pdo->query("SELECT p.*, c.nom as categorie_nom FROM produits p LEFT JOIN categories c ON p.categorie_id = c.id ORDER BY p.date_ajout DESC");
-$produits = $stmt->fetchAll();
+// Get all articles
+$articles = $pdo->query("
+    SELECT a.*, c.nom AS categorie_nom, u.username AS auteur_nom, COALESCE(s.quantite, 0) AS stock
+    FROM articles a
+    LEFT JOIN categories c ON a.categorie_id = c.id
+    LEFT JOIN users u ON a.auteur_id = u.id
+    LEFT JOIN stock s ON a.id = s.article_id
+    ORDER BY a.date_creation DESC
+")->fetchAll();
+
+require_once '../includes/header.php';
 ?>
-<!DOCTYPE html>
-<html lang="fr">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title><?= $pageTitle ?></title>
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
-    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
-    <link href="<?= SITE_URL ?>/assets/css/style.css" rel="stylesheet">
-</head>
-<body>
-    <nav class="navbar navbar-expand-lg navbar-dark bg-dark">
-        <div class="container-fluid">
-            <a class="navbar-brand" href="<?= SITE_URL ?>/admin/">
-                <i class="fas fa-cog"></i> Admin - <?= SITE_NAME ?>
+
+<div class="admin-layout">
+    <aside class="admin-sidebar">
+        <div class="admin-sidebar-header">
+            <h3><i class="bi bi-gear-fill"></i> Admin</h3>
+        </div>
+        <nav class="admin-nav">
+            <a href="<?= SITE_URL ?>/admin/index.php" class="admin-nav-link">
+                <i class="bi bi-speedometer2"></i> Tableau de bord
             </a>
-            <div class="navbar-nav ms-auto">
-                <a class="nav-link" href="<?= SITE_URL ?>"><i class="fas fa-external-link-alt"></i> Voir le site</a>
-                <a class="nav-link" href="<?= SITE_URL ?>/deconnexion.php"><i class="fas fa-sign-out-alt"></i> Déconnexion</a>
-            </div>
+            <a href="<?= SITE_URL ?>/admin/produits.php" class="admin-nav-link active">
+                <i class="bi bi-box-seam"></i> Articles
+            </a>
+            <a href="<?= SITE_URL ?>/admin/categories.php" class="admin-nav-link">
+                <i class="bi bi-grid"></i> Catégories
+            </a>
+            <a href="<?= SITE_URL ?>/admin/commandes.php" class="admin-nav-link">
+                <i class="bi bi-receipt"></i> Factures
+            </a>
+            <a href="<?= SITE_URL ?>/admin/utilisateurs.php" class="admin-nav-link">
+                <i class="bi bi-people"></i> Utilisateurs
+            </a>
+            <hr>
+            <a href="<?= SITE_URL ?>/index.php" class="admin-nav-link">
+                <i class="bi bi-arrow-left"></i> Retour au site
+            </a>
+        </nav>
+    </aside>
+
+    <main class="admin-main">
+        <div class="admin-header">
+            <h1>Articles</h1>
+            <a href="<?= SITE_URL ?>/admin/produit-form.php" class="btn btn-primary">
+                <i class="bi bi-plus-lg"></i> Nouvel article
+            </a>
         </div>
-    </nav>
 
-    <div class="container-fluid">
-        <div class="row">
-            <div class="col-md-2 admin-sidebar py-3">
-                <nav class="nav flex-column">
-                    <a class="nav-link" href="index.php"><i class="fas fa-tachometer-alt me-2"></i>Tableau de bord</a>
-                    <a class="nav-link active" href="produits.php"><i class="fas fa-box me-2"></i>Produits</a>
-                    <a class="nav-link" href="categories.php"><i class="fas fa-tags me-2"></i>Catégories</a>
-                    <a class="nav-link" href="commandes.php"><i class="fas fa-shopping-cart me-2"></i>Commandes</a>
-                    <a class="nav-link" href="utilisateurs.php"><i class="fas fa-users me-2"></i>Utilisateurs</a>
-                </nav>
-            </div>
+        <div class="admin-card fade-in">
+            <table class="admin-table">
+                <thead>
+                    <tr>
+                        <th>Image</th>
+                        <th>Nom</th>
+                        <th>Catégorie</th>
+                        <th>Vendeur</th>
+                        <th>Prix</th>
+                        <th>Stock</th>
+                        <th>Date</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <?php foreach ($articles as $article): ?>
+                        <tr>
+                            <td>
+                                <?php if ($article['image']): ?>
+                                    <img src="<?= SITE_URL ?>/uploads/produits/<?= $article['image'] ?>" alt="" style="width:50px;height:50px;object-fit:cover;border-radius:8px;">
+                                <?php else: ?>
+                                    <div style="width:50px;height:50px;background:#f5f5f7;border-radius:8px;display:flex;align-items:center;justify-content:center;">
+                                        <i class="bi bi-image" style="color:#86868b;"></i>
+                                    </div>
+                                <?php endif; ?>
+                            </td>
+                            <td><strong><?= sanitize($article['nom']) ?></strong></td>
+                            <td><?= sanitize($article['categorie_nom'] ?? 'N/A') ?></td>
+                            <td><?= sanitize($article['auteur_nom'] ?? 'N/A') ?></td>
+                            <td><?= formatPrice($article['prix']) ?></td>
+                            <td>
+                                <span class="badge <?= $article['stock'] > 0 ? 'badge-success' : 'badge-danger' ?>">
+                                    <?= $article['stock'] ?>
+                                </span>
+                            </td>
+                            <td><?= date('d/m/Y', strtotime($article['date_creation'])) ?></td>
+                            <td>
+                                <div style="display:flex;gap:0.5rem;">
+                                    <a href="<?= SITE_URL ?>/admin/produit-form.php?id=<?= $article['id'] ?>" class="btn-small" title="Modifier">
+                                        <i class="bi bi-pencil"></i>
+                                    </a>
+                                    <a href="<?= SITE_URL ?>/admin/produits.php?delete=<?= $article['id'] ?>" class="btn-small btn-danger" onclick="return confirm('Supprimer cet article ?')" title="Supprimer">
+                                        <i class="bi bi-trash"></i>
+                                    </a>
+                                </div>
+                            </td>
+                        </tr>
+                    <?php endforeach; ?>
+                </tbody>
+            </table>
 
-            <div class="col-md-10 py-4">
-                <div class="d-flex justify-content-between align-items-center mb-4">
-                    <h1>Gestion des produits</h1>
-                    <a href="produit-form.php" class="btn btn-primary"><i class="fas fa-plus"></i> Ajouter un produit</a>
-                </div>
-
-                <div class="card">
-                    <div class="card-body">
-                        <div class="table-responsive">
-                            <table class="table table-hover">
-                                <thead class="table-dark">
-                                    <tr>
-                                        <th>Image</th>
-                                        <th>Nom</th>
-                                        <th>Catégorie</th>
-                                        <th>Prix</th>
-                                        <th>Stock</th>
-                                        <th>Actions</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    <?php foreach ($produits as $produit): ?>
-                                    <tr>
-                                        <td>
-                                            <?php if ($produit['image']): ?>
-                                                <img src="<?= SITE_URL ?>/uploads/produits/<?= $produit['image'] ?>" width="50" height="50" style="object-fit:cover;" class="rounded">
-                                            <?php else: ?>
-                                                <div class="img-placeholder rounded" style="width:50px;height:50px;"><i class="fas fa-image"></i></div>
-                                            <?php endif; ?>
-                                        </td>
-                                        <td><?= htmlspecialchars($produit['nom']) ?></td>
-                                        <td><?= htmlspecialchars($produit['categorie_nom'] ?? 'Non classé') ?></td>
-                                        <td><?= number_format($produit['prix'], 2, ',', ' ') ?> €</td>
-                                        <td>
-                                            <span class="badge bg-<?= $produit['stock'] > 10 ? 'success' : ($produit['stock'] > 0 ? 'warning' : 'danger') ?>">
-                                                <?= $produit['stock'] ?>
-                                            </span>
-                                        </td>
-                                        <td>
-                                            <a href="produit-form.php?id=<?= $produit['id'] ?>" class="btn btn-sm btn-outline-primary"><i class="fas fa-edit"></i></a>
-                                            <a href="produits.php?delete=<?= $produit['id'] ?>" class="btn btn-sm btn-outline-danger" onclick="return confirm('Supprimer ce produit ?')"><i class="fas fa-trash"></i></a>
-                                        </td>
-                                    </tr>
-                                    <?php endforeach; ?>
-                                </tbody>
-                            </table>
-                        </div>
-                    </div>
-                </div>
-            </div>
+            <?php if (empty($articles)): ?>
+                <p style="text-align:center;padding:2rem;color:#86868b;">Aucun article pour le moment.</p>
+            <?php endif; ?>
         </div>
-    </div>
+    </main>
+</div>
 
-    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
-</body>
-</html>
+<?php require_once '../includes/footer.php'; ?>

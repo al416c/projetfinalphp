@@ -1,181 +1,158 @@
 <?php
 require_once 'config/init.php';
+$pageTitle = 'Articles';
 
-$pageTitle = 'Nos produits - ' . SITE_NAME;
-
-$page = isset($_GET['page']) ? (int)$_GET['page'] : 1;
+// Filters
+$categorie_id = isset($_GET['categorie']) ? (int)$_GET['categorie'] : 0;
+$sort = $_GET['sort'] ?? 'recent';
+$prix_min = isset($_GET['prix_min']) ? (float)$_GET['prix_min'] : 0;
+$prix_max = isset($_GET['prix_max']) ? (float)$_GET['prix_max'] : 0;
+$page = max(1, (int)($_GET['page'] ?? 1));
 $perPage = 12;
 $offset = ($page - 1) * $perPage;
 
-$where = "1=1";
+// Build query
+$where = [];
 $params = [];
 
-if (isset($_GET['categorie']) && !empty($_GET['categorie'])) {
-    $where .= " AND p.categorie_id = ?";
-    $params[] = $_GET['categorie'];
+if ($categorie_id > 0) {
+    $where[] = 'a.categorie_id = ?';
+    $params[] = $categorie_id;
+}
+if ($prix_min > 0) {
+    $where[] = 'a.prix >= ?';
+    $params[] = $prix_min;
+}
+if ($prix_max > 0) {
+    $where[] = 'a.prix <= ?';
+    $params[] = $prix_max;
 }
 
-if (isset($_GET['prix_min']) && is_numeric($_GET['prix_min'])) {
-    $where .= " AND p.prix >= ?";
-    $params[] = $_GET['prix_min'];
-}
+$whereSQL = $where ? 'WHERE ' . implode(' AND ', $where) : '';
 
-if (isset($_GET['prix_max']) && is_numeric($_GET['prix_max'])) {
-    $where .= " AND p.prix <= ?";
-    $params[] = $_GET['prix_max'];
-}
+$orderSQL = match ($sort) {
+    'prix_asc' => 'ORDER BY a.prix ASC',
+    'prix_desc' => 'ORDER BY a.prix DESC',
+    'nom' => 'ORDER BY a.nom ASC',
+    'populaire' => 'ORDER BY avg_note DESC, nb_avis DESC',
+    default => 'ORDER BY a.date_publication DESC',
+};
 
-$orderBy = "p.date_ajout DESC";
-if (isset($_GET['tri'])) {
-    switch ($_GET['tri']) {
-        case 'prix_asc':
-            $orderBy = "p.prix ASC";
-            break;
-        case 'prix_desc':
-            $orderBy = "p.prix DESC";
-            break;
-        case 'nom':
-            $orderBy = "p.nom ASC";
-            break;
-    }
-}
+// Count total
+$stmtCount = $pdo->prepare("SELECT COUNT(*) FROM articles a $whereSQL");
+$stmtCount->execute($params);
+$total = $stmtCount->fetchColumn();
+$totalPages = max(1, ceil($total / $perPage));
 
-$countStmt = $pdo->prepare("SELECT COUNT(*) FROM produits p WHERE $where");
-$countStmt->execute($params);
-$total = $countStmt->fetchColumn();
-$totalPages = ceil($total / $perPage);
+// Fetch articles
+$stmtArticles = $pdo->prepare("
+    SELECT a.*, s.quantite as stock, u.username as auteur_nom, c.nom as categorie_nom,
+        (SELECT AVG(note) FROM commentaires WHERE article_id = a.id) as avg_note,
+        (SELECT COUNT(*) FROM commentaires WHERE article_id = a.id) as nb_avis
+    FROM articles a
+    LEFT JOIN stock s ON a.id = s.article_id
+    LEFT JOIN users u ON a.auteur_id = u.id
+    LEFT JOIN categories c ON a.categorie_id = c.id
+    $whereSQL
+    $orderSQL
+    LIMIT $perPage OFFSET $offset
+");
+$stmtArticles->execute($params);
+$articles = $stmtArticles->fetchAll();
 
-$stmt = $pdo->prepare("SELECT p.*, c.nom as categorie_nom FROM produits p LEFT JOIN categories c ON p.categorie_id = c.id WHERE $where ORDER BY $orderBy LIMIT $perPage OFFSET $offset");
-$stmt->execute($params);
-$produits = $stmt->fetchAll();
-
-$categories = $pdo->query("SELECT * FROM categories ORDER BY nom")->fetchAll();
+// Get categories for filter
+$categories = $pdo->query("SELECT c.*, COUNT(a.id) as nb FROM categories c LEFT JOIN articles a ON c.id = a.categorie_id GROUP BY c.id ORDER BY c.nom")->fetchAll();
 
 require_once 'includes/header.php';
 ?>
 
-<div class="container">
-    <nav aria-label="breadcrumb">
-        <ol class="breadcrumb">
-            <li class="breadcrumb-item"><a href="index.php">Accueil</a></li>
-            <li class="breadcrumb-item active">Produits</li>
-        </ol>
-    </nav>
-
-    <div class="row">
-        <div class="col-md-3">
-            <div class="card mb-4">
-                <div class="card-header">
-                    <h5 class="mb-0">Filtres</h5>
-                </div>
-                <div class="card-body">
-                    <form method="GET" action="">
-                        <div class="mb-3">
-                            <label class="form-label">Catégorie</label>
-                            <select name="categorie" class="form-select">
-                                <option value="">Toutes</option>
-                                <?php foreach ($categories as $cat): ?>
-                                <option value="<?= $cat['id'] ?>" <?= (isset($_GET['categorie']) && $_GET['categorie'] == $cat['id']) ? 'selected' : '' ?>>
-                                    <?= htmlspecialchars($cat['nom']) ?>
-                                </option>
-                                <?php endforeach; ?>
-                            </select>
-                        </div>
-                        <div class="mb-3">
-                            <label class="form-label">Prix minimum</label>
-                            <input type="number" name="prix_min" class="form-control" value="<?= $_GET['prix_min'] ?? '' ?>" min="0" step="0.01">
-                        </div>
-                        <div class="mb-3">
-                            <label class="form-label">Prix maximum</label>
-                            <input type="number" name="prix_max" class="form-control" value="<?= $_GET['prix_max'] ?? '' ?>" min="0" step="0.01">
-                        </div>
-                        <div class="mb-3">
-                            <label class="form-label">Trier par</label>
-                            <select name="tri" class="form-select">
-                                <option value="">Plus récents</option>
-                                <option value="prix_asc" <?= (isset($_GET['tri']) && $_GET['tri'] == 'prix_asc') ? 'selected' : '' ?>>Prix croissant</option>
-                                <option value="prix_desc" <?= (isset($_GET['tri']) && $_GET['tri'] == 'prix_desc') ? 'selected' : '' ?>>Prix décroissant</option>
-                                <option value="nom" <?= (isset($_GET['tri']) && $_GET['tri'] == 'nom') ? 'selected' : '' ?>>Nom</option>
-                            </select>
-                        </div>
-                        <button type="submit" class="btn btn-primary w-100">Filtrer</button>
-                        <a href="produits.php" class="btn btn-outline-secondary w-100 mt-2">Réinitialiser</a>
-                    </form>
-                </div>
-            </div>
-        </div>
-
-        <div class="col-md-9">
-            <div class="d-flex justify-content-between align-items-center mb-4">
-                <h1>Nos produits</h1>
-                <span class="text-muted"><?= $total ?> produit(s) trouvé(s)</span>
-            </div>
-
-            <?php if (empty($produits)): ?>
-                <div class="alert alert-info">Aucun produit trouvé avec ces critères.</div>
-            <?php else: ?>
-                <div class="row g-4">
-                    <?php foreach ($produits as $produit): ?>
-                    <div class="col-md-4">
-                        <div class="card card-product">
-                            <?php if ($produit['image']): ?>
-                                <img src="uploads/produits/<?= $produit['image'] ?>" class="card-img-top" alt="<?= htmlspecialchars($produit['nom']) ?>">
-                            <?php else: ?>
-                                <div class="card-img-top img-placeholder" style="height:200px;"><i class="fas fa-image"></i></div>
-                            <?php endif; ?>
-                            <div class="card-body">
-                                <span class="badge bg-secondary mb-2"><?= htmlspecialchars($produit['categorie_nom'] ?? 'Non classé') ?></span>
-                                <h5 class="card-title"><?= htmlspecialchars($produit['nom']) ?></h5>
-                                <p class="price"><?= number_format($produit['prix'], 2, ',', ' ') ?> €</p>
-                                <?php if ($produit['stock'] > 0): ?>
-                                    <span class="badge bg-success stock-badge mb-2">En stock</span>
-                                <?php else: ?>
-                                    <span class="badge bg-danger stock-badge mb-2">Rupture</span>
-                                <?php endif; ?>
-                                <div class="d-grid gap-2">
-                                    <a href="produit.php?id=<?= $produit['id'] ?>" class="btn btn-outline-primary btn-sm">Voir détails</a>
-                                    <?php if ($produit['stock'] > 0): ?>
-                                    <form action="ajax/add_cart.php" method="POST" class="add-to-cart-form">
-                                        <input type="hidden" name="produit_id" value="<?= $produit['id'] ?>">
-                                        <input type="hidden" name="quantite" value="1">
-                                        <button type="submit" class="btn btn-primary btn-sm w-100">
-                                            <i class="fas fa-cart-plus"></i> Ajouter
-                                        </button>
-                                    </form>
-                                    <?php endif; ?>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                    <?php endforeach; ?>
-                </div>
-
-                <?php if ($totalPages > 1): ?>
-                <nav class="mt-4">
-                    <ul class="pagination justify-content-center">
-                        <?php if ($page > 1): ?>
-                            <li class="page-item">
-                                <a class="page-link" href="?<?= http_build_query(array_merge($_GET, ['page' => $page - 1])) ?>">Précédent</a>
-                            </li>
-                        <?php endif; ?>
-                        
-                        <?php for ($i = 1; $i <= $totalPages; $i++): ?>
-                            <li class="page-item <?= $i == $page ? 'active' : '' ?>">
-                                <a class="page-link" href="?<?= http_build_query(array_merge($_GET, ['page' => $i])) ?>"><?= $i ?></a>
-                            </li>
-                        <?php endfor; ?>
-                        
-                        <?php if ($page < $totalPages): ?>
-                            <li class="page-item">
-                                <a class="page-link" href="?<?= http_build_query(array_merge($_GET, ['page' => $page + 1])) ?>">Suivant</a>
-                            </li>
-                        <?php endif; ?>
-                    </ul>
-                </nav>
-                <?php endif; ?>
-            <?php endif; ?>
-        </div>
+<div class="page-hero">
+    <div class="container">
+        <h1 class="fade-in">Explorer</h1>
+        <p class="fade-in"><?= $total ?> article<?= $total > 1 ? 's' : '' ?> disponible<?= $total > 1 ? 's' : '' ?></p>
     </div>
 </div>
+
+<div class="container-wide">
+    <!-- Filters -->
+    <div class="filters-bar fade-in">
+        <a href="produits.php" class="filter-chip <?= !$categorie_id ? 'active' : '' ?>">Tout</a>
+        <?php foreach ($categories as $cat): ?>
+            <a href="produits.php?categorie=<?= $cat['id'] ?>&sort=<?= $sort ?>" class="filter-chip <?= $categorie_id === (int)$cat['id'] ? 'active' : '' ?>">
+                <?= sanitize($cat['nom']) ?>
+            </a>
+        <?php endforeach; ?>
+
+        <div style="margin-left: auto;">
+            <select class="filter-select" onchange="location.href=this.value">
+                <option value="produits.php?<?= $categorie_id ? "categorie=$categorie_id&" : '' ?>sort=recent" <?= $sort === 'recent' ? 'selected' : '' ?>>Plus récents</option>
+                <option value="produits.php?<?= $categorie_id ? "categorie=$categorie_id&" : '' ?>sort=prix_asc" <?= $sort === 'prix_asc' ? 'selected' : '' ?>>Prix croissant</option>
+                <option value="produits.php?<?= $categorie_id ? "categorie=$categorie_id&" : '' ?>sort=prix_desc" <?= $sort === 'prix_desc' ? 'selected' : '' ?>>Prix décroissant</option>
+                <option value="produits.php?<?= $categorie_id ? "categorie=$categorie_id&" : '' ?>sort=populaire" <?= $sort === 'populaire' ? 'selected' : '' ?>>Populaires</option>
+                <option value="produits.php?<?= $categorie_id ? "categorie=$categorie_id&" : '' ?>sort=nom" <?= $sort === 'nom' ? 'selected' : '' ?>>Nom A-Z</option>
+            </select>
+        </div>
+    </div>
+
+    <!-- Products grid -->
+    <?php if (empty($articles)): ?>
+        <div class="empty-state fade-in">
+            <i class="bi bi-box-seam"></i>
+            <h3>Aucun article trouvé</h3>
+            <p>Essayez de modifier vos filtres ou revenez plus tard.</p>
+            <a href="produits.php" class="btn btn-primary">Voir tous les articles</a>
+        </div>
+    <?php else: ?>
+        <div class="product-grid stagger-children">
+            <?php foreach ($articles as $article): ?>
+            <a href="produit.php?id=<?= $article['id'] ?>" class="card" style="text-decoration: none; color: inherit;">
+                <?php if ($article['image'] && file_exists("uploads/produits/{$article['image']}")): ?>
+                    <img src="uploads/produits/<?= sanitize($article['image']) ?>" alt="<?= sanitize($article['nom']) ?>" class="card-img">
+                <?php else: ?>
+                    <div class="card-img" style="display: flex; align-items: center; justify-content: center; background: var(--bg-secondary);">
+                        <i class="bi bi-box-seam" style="font-size: 40px; color: var(--text-tertiary);"></i>
+                    </div>
+                <?php endif; ?>
+                <div class="card-body">
+                    <p class="eyebrow"><?= sanitize($article['categorie_nom'] ?? 'Article') ?></p>
+                    <h3><?= sanitize($article['nom']) ?></h3>
+                    <div class="card-meta">
+                        <span class="price"><?= formatPrice($article['prix']) ?></span>
+                        <?php if ($article['avg_note']): ?>
+                            <span class="caption" style="display: flex; align-items: center; gap: 4px;">
+                                <i class="bi bi-star-fill" style="color: #ff9f0a;"></i>
+                                <?= round($article['avg_note'], 1) ?>
+                                <span>(<?= $article['nb_avis'] ?>)</span>
+                            </span>
+                        <?php endif; ?>
+                    </div>
+                    <p class="caption mt-1">par <?= sanitize($article['auteur_nom']) ?></p>
+                </div>
+            </a>
+            <?php endforeach; ?>
+        </div>
+
+        <!-- Pagination -->
+        <?php if ($totalPages > 1): ?>
+        <div class="pagination fade-in">
+            <?php if ($page > 1): ?>
+                <a href="produits.php?page=<?= $page - 1 ?>&categorie=<?= $categorie_id ?>&sort=<?= $sort ?>"><i class="bi bi-chevron-left"></i></a>
+            <?php endif; ?>
+            <?php for ($i = 1; $i <= $totalPages; $i++): ?>
+                <?php if ($i === $page): ?>
+                    <span class="active"><?= $i ?></span>
+                <?php else: ?>
+                    <a href="produits.php?page=<?= $i ?>&categorie=<?= $categorie_id ?>&sort=<?= $sort ?>"><?= $i ?></a>
+                <?php endif; ?>
+            <?php endfor; ?>
+            <?php if ($page < $totalPages): ?>
+                <a href="produits.php?page=<?= $page + 1 ?>&categorie=<?= $categorie_id ?>&sort=<?= $sort ?>"><i class="bi bi-chevron-right"></i></a>
+            <?php endif; ?>
+        </div>
+        <?php endif; ?>
+    <?php endif; ?>
+</div>
+
+<div style="height: 80px;"></div>
 
 <?php require_once 'includes/footer.php'; ?>

@@ -5,175 +5,218 @@ if (!isAdmin()) {
     redirect('../connexion.php');
 }
 
-$categories = $pdo->query("SELECT * FROM categories ORDER BY nom")->fetchAll();
+$editing = false;
+$article = ['nom' => '', 'description' => '', 'prix' => '', 'categorie_id' => '', 'image' => ''];
+$stock = 0;
 
-$produit = null;
-$isEdit = false;
-
+// Edit mode
 if (isset($_GET['id'])) {
-    $stmt = $pdo->prepare("SELECT * FROM produits WHERE id = ?");
-    $stmt->execute([$_GET['id']]);
-    $produit = $stmt->fetch();
-    $isEdit = true;
+    $id = (int) $_GET['id'];
+    $stmt = $pdo->prepare("SELECT * FROM articles WHERE id = ?");
+    $stmt->execute([$id]);
+    $article = $stmt->fetch();
+
+    if (!$article) {
+        redirect('produits.php');
+    }
+    $editing = true;
+
+    $stmt = $pdo->prepare("SELECT quantite FROM stock WHERE article_id = ?");
+    $stmt->execute([$id]);
+    $stock = $stmt->fetchColumn() ?: 0;
 }
 
-$pageTitle = ($isEdit ? 'Modifier' : 'Ajouter') . ' un produit - ' . SITE_NAME;
+$pageTitle = $editing ? 'Modifier l\'article' : 'Nouvel article';
 $errors = [];
 
+// Categories
+$categories = $pdo->query("SELECT * FROM categories ORDER BY nom")->fetchAll();
+
+// Form submission
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-    $nom = sanitize($_POST['nom'] ?? '');
-    $description = sanitize($_POST['description'] ?? '');
+    $nom = trim($_POST['nom'] ?? '');
+    $description = trim($_POST['description'] ?? '');
     $prix = floatval($_POST['prix'] ?? 0);
-    $stock = intval($_POST['stock'] ?? 0);
-    $categorie_id = !empty($_POST['categorie_id']) ? intval($_POST['categorie_id']) : null;
+    $categorieId = (int) ($_POST['categorie_id'] ?? 0);
+    $quantite = (int) ($_POST['quantite'] ?? 0);
 
-    if (empty($nom)) {
-        $errors[] = "Le nom est requis.";
-    }
-    if ($prix <= 0) {
-        $errors[] = "Le prix doit être supérieur à 0.";
-    }
-    if ($stock < 0) {
-        $errors[] = "Le stock ne peut pas être négatif.";
-    }
+    if (empty($nom)) $errors[] = 'Le nom est requis.';
+    if (empty($description)) $errors[] = 'La description est requise.';
+    if ($prix <= 0) $errors[] = 'Le prix doit être supérieur à 0.';
+    if ($categorieId <= 0) $errors[] = 'Veuillez sélectionner une catégorie.';
+    if ($quantite < 0) $errors[] = 'La quantité ne peut pas être négative.';
 
-    $imageName = $produit['image'] ?? null;
-    if (isset($_FILES['image']) && $_FILES['image']['error'] === UPLOAD_ERR_OK) {
+    // Image upload
+    $imageName = $editing ? $article['image'] : '';
+    if (!empty($_FILES['image']['name'])) {
         $allowed = ['jpg', 'jpeg', 'png', 'gif', 'webp'];
         $ext = strtolower(pathinfo($_FILES['image']['name'], PATHINFO_EXTENSION));
-        
-        if (in_array($ext, $allowed)) {
-            $imageName = uniqid() . '.' . $ext;
-            $uploadDir = '../uploads/produits/';
-            if (!is_dir($uploadDir)) {
-                mkdir($uploadDir, 0777, true);
-            }
-            move_uploaded_file($_FILES['image']['tmp_name'], $uploadDir . $imageName);
+        if (!in_array($ext, $allowed)) {
+            $errors[] = 'Format d\'image non autorisé.';
+        } elseif ($_FILES['image']['size'] > 5 * 1024 * 1024) {
+            $errors[] = 'Image trop volumineuse (max 5 Mo).';
         } else {
-            $errors[] = "Format d'image non autorisé.";
+            $imageName = uniqid('art_') . '.' . $ext;
+            $uploadPath = UPLOAD_DIR . 'produits/' . $imageName;
+            if (!is_dir(UPLOAD_DIR . 'produits/')) {
+                mkdir(UPLOAD_DIR . 'produits/', 0777, true);
+            }
+            if (!move_uploaded_file($_FILES['image']['tmp_name'], $uploadPath)) {
+                $errors[] = 'Erreur lors de l\'upload de l\'image.';
+                $imageName = $editing ? $article['image'] : '';
+            } else {
+                // Delete old image if editing
+                if ($editing && $article['image'] && $article['image'] !== $imageName) {
+                    $oldPath = UPLOAD_DIR . 'produits/' . $article['image'];
+                    if (file_exists($oldPath)) unlink($oldPath);
+                }
+            }
         }
     }
 
     if (empty($errors)) {
-        if ($isEdit) {
-            $stmt = $pdo->prepare("UPDATE produits SET nom = ?, description = ?, prix = ?, stock = ?, categorie_id = ?, image = ? WHERE id = ?");
-            $stmt->execute([$nom, $description, $prix, $stock, $categorie_id, $imageName, $produit['id']]);
+        if ($editing) {
+            $stmt = $pdo->prepare("UPDATE articles SET nom = ?, description = ?, prix = ?, categorie_id = ?, image = ? WHERE id = ?");
+            $stmt->execute([$nom, $description, $prix, $categorieId, $imageName, $article['id']]);
+
+            // Update stock
+            $stmt = $pdo->prepare("SELECT id FROM stock WHERE article_id = ?");
+            $stmt->execute([$article['id']]);
+            if ($stmt->fetch()) {
+                $pdo->prepare("UPDATE stock SET quantite = ? WHERE article_id = ?")->execute([$quantite, $article['id']]);
+            } else {
+                $pdo->prepare("INSERT INTO stock (article_id, quantite) VALUES (?, ?)")->execute([$article['id'], $quantite]);
+            }
+
+            setFlash('success', 'Article modifié avec succès.');
         } else {
-            $stmt = $pdo->prepare("INSERT INTO produits (nom, description, prix, stock, categorie_id, image) VALUES (?, ?, ?, ?, ?, ?)");
-            $stmt->execute([$nom, $description, $prix, $stock, $categorie_id, $imageName]);
+            // Admin creates articles as their own
+            $stmt = $pdo->prepare("INSERT INTO articles (nom, description, prix, image, categorie_id, auteur_id) VALUES (?, ?, ?, ?, ?, ?)");
+            $stmt->execute([$nom, $description, $prix, $imageName, $categorieId, $_SESSION['user_id']]);
+            $newId = $pdo->lastInsertId();
+
+            $pdo->prepare("INSERT INTO stock (article_id, quantite) VALUES (?, ?)")->execute([$newId, $quantite]);
+            setFlash('success', 'Article créé avec succès.');
         }
+
         redirect('produits.php');
+    } else {
+        // Preserve form data
+        $article = ['nom' => $nom, 'description' => $description, 'prix' => $prix, 'categorie_id' => $categorieId, 'image' => $imageName];
+        $stock = $quantite;
     }
 }
+
+require_once '../includes/header.php';
 ?>
-<!DOCTYPE html>
-<html lang="fr">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title><?= $pageTitle ?></title>
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
-    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
-    <link href="<?= SITE_URL ?>/assets/css/style.css" rel="stylesheet">
-</head>
-<body>
-    <nav class="navbar navbar-expand-lg navbar-dark bg-dark">
-        <div class="container-fluid">
-            <a class="navbar-brand" href="<?= SITE_URL ?>/admin/">
-                <i class="fas fa-cog"></i> Admin - <?= SITE_NAME ?>
+
+<div class="admin-layout">
+    <aside class="admin-sidebar">
+        <div class="admin-sidebar-header">
+            <h3><i class="bi bi-gear-fill"></i> Admin</h3>
+        </div>
+        <nav class="admin-nav">
+            <a href="<?= SITE_URL ?>/admin/index.php" class="admin-nav-link">
+                <i class="bi bi-speedometer2"></i> Tableau de bord
             </a>
-            <div class="navbar-nav ms-auto">
-                <a class="nav-link" href="<?= SITE_URL ?>"><i class="fas fa-external-link-alt"></i> Voir le site</a>
-                <a class="nav-link" href="<?= SITE_URL ?>/deconnexion.php"><i class="fas fa-sign-out-alt"></i> Déconnexion</a>
-            </div>
+            <a href="<?= SITE_URL ?>/admin/produits.php" class="admin-nav-link active">
+                <i class="bi bi-box-seam"></i> Articles
+            </a>
+            <a href="<?= SITE_URL ?>/admin/categories.php" class="admin-nav-link">
+                <i class="bi bi-grid"></i> Catégories
+            </a>
+            <a href="<?= SITE_URL ?>/admin/commandes.php" class="admin-nav-link">
+                <i class="bi bi-receipt"></i> Factures
+            </a>
+            <a href="<?= SITE_URL ?>/admin/utilisateurs.php" class="admin-nav-link">
+                <i class="bi bi-people"></i> Utilisateurs
+            </a>
+            <hr>
+            <a href="<?= SITE_URL ?>/index.php" class="admin-nav-link">
+                <i class="bi bi-arrow-left"></i> Retour au site
+            </a>
+        </nav>
+    </aside>
+
+    <main class="admin-main">
+        <div class="admin-header">
+            <h1><?= $editing ? 'Modifier l\'article' : 'Nouvel article' ?></h1>
+            <a href="<?= SITE_URL ?>/admin/produits.php" class="btn btn-secondary">
+                <i class="bi bi-arrow-left"></i> Retour
+            </a>
         </div>
-    </nav>
 
-    <div class="container-fluid">
-        <div class="row">
-            <div class="col-md-2 admin-sidebar py-3">
-                <nav class="nav flex-column">
-                    <a class="nav-link" href="index.php"><i class="fas fa-tachometer-alt me-2"></i>Tableau de bord</a>
-                    <a class="nav-link active" href="produits.php"><i class="fas fa-box me-2"></i>Produits</a>
-                    <a class="nav-link" href="categories.php"><i class="fas fa-tags me-2"></i>Catégories</a>
-                    <a class="nav-link" href="commandes.php"><i class="fas fa-shopping-cart me-2"></i>Commandes</a>
-                    <a class="nav-link" href="utilisateurs.php"><i class="fas fa-users me-2"></i>Utilisateurs</a>
-                </nav>
+        <?php if (!empty($errors)): ?>
+            <div class="alert alert-error fade-in">
+                <ul style="margin:0;padding-left:1.5rem;">
+                    <?php foreach ($errors as $error): ?>
+                        <li><?= $error ?></li>
+                    <?php endforeach; ?>
+                </ul>
             </div>
+        <?php endif; ?>
 
-            <div class="col-md-10 py-4">
-                <div class="d-flex justify-content-between align-items-center mb-4">
-                    <h1><?= $isEdit ? 'Modifier' : 'Ajouter' ?> un produit</h1>
-                    <a href="produits.php" class="btn btn-outline-secondary"><i class="fas fa-arrow-left"></i> Retour</a>
+        <div class="admin-card fade-in">
+            <form method="POST" enctype="multipart/form-data" class="form-modern">
+                <div class="form-grid">
+                    <div class="form-group">
+                        <label for="nom">Nom de l'article</label>
+                        <input type="text" id="nom" name="nom" value="<?= sanitize($article['nom']) ?>" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="prix">Prix (€)</label>
+                        <input type="number" id="prix" name="prix" step="0.01" min="0.01" value="<?= $article['prix'] ?>" required>
+                    </div>
                 </div>
 
-                <?php if (!empty($errors)): ?>
-                    <div class="alert alert-danger">
-                        <ul class="mb-0">
-                            <?php foreach ($errors as $error): ?>
-                                <li><?= $error ?></li>
+                <div class="form-group">
+                    <label for="description">Description</label>
+                    <textarea id="description" name="description" rows="5" required><?= sanitize($article['description']) ?></textarea>
+                </div>
+
+                <div class="form-grid">
+                    <div class="form-group">
+                        <label for="categorie_id">Catégorie</label>
+                        <select id="categorie_id" name="categorie_id" required>
+                            <option value="">Sélectionner...</option>
+                            <?php foreach ($categories as $cat): ?>
+                                <option value="<?= $cat['id'] ?>" <?= $article['categorie_id'] == $cat['id'] ? 'selected' : '' ?>>
+                                    <?= sanitize($cat['nom']) ?>
+                                </option>
                             <?php endforeach; ?>
-                        </ul>
+                        </select>
                     </div>
-                <?php endif; ?>
-
-                <div class="card">
-                    <div class="card-body">
-                        <form method="POST" enctype="multipart/form-data">
-                            <div class="row">
-                                <div class="col-md-8">
-                                    <div class="mb-3">
-                                        <label class="form-label">Nom du produit</label>
-                                        <input type="text" name="nom" class="form-control" value="<?= htmlspecialchars($produit['nom'] ?? $_POST['nom'] ?? '') ?>" required>
-                                    </div>
-                                    <div class="mb-3">
-                                        <label class="form-label">Description</label>
-                                        <textarea name="description" class="form-control" rows="5"><?= htmlspecialchars($produit['description'] ?? $_POST['description'] ?? '') ?></textarea>
-                                    </div>
-                                    <div class="row">
-                                        <div class="col-md-4 mb-3">
-                                            <label class="form-label">Prix (€)</label>
-                                            <input type="number" name="prix" class="form-control" step="0.01" min="0" value="<?= $produit['prix'] ?? $_POST['prix'] ?? '' ?>" required>
-                                        </div>
-                                        <div class="col-md-4 mb-3">
-                                            <label class="form-label">Stock</label>
-                                            <input type="number" name="stock" class="form-control" min="0" value="<?= $produit['stock'] ?? $_POST['stock'] ?? 0 ?>">
-                                        </div>
-                                        <div class="col-md-4 mb-3">
-                                            <label class="form-label">Catégorie</label>
-                                            <select name="categorie_id" class="form-select">
-                                                <option value="">-- Aucune --</option>
-                                                <?php foreach ($categories as $cat): ?>
-                                                <option value="<?= $cat['id'] ?>" <?= (($produit['categorie_id'] ?? '') == $cat['id']) ? 'selected' : '' ?>>
-                                                    <?= htmlspecialchars($cat['nom']) ?>
-                                                </option>
-                                                <?php endforeach; ?>
-                                            </select>
-                                        </div>
-                                    </div>
-                                </div>
-                                <div class="col-md-4">
-                                    <div class="mb-3">
-                                        <label class="form-label">Image</label>
-                                        <?php if ($produit && $produit['image']): ?>
-                                            <div class="mb-2">
-                                                <img src="<?= SITE_URL ?>/uploads/produits/<?= $produit['image'] ?>" class="img-fluid rounded" alt="">
-                                            </div>
-                                        <?php endif; ?>
-                                        <input type="file" name="image" class="form-control" accept="image/*">
-                                    </div>
-                                </div>
-                            </div>
-                            <button type="submit" class="btn btn-primary">
-                                <i class="fas fa-save"></i> <?= $isEdit ? 'Modifier' : 'Ajouter' ?>
-                            </button>
-                        </form>
+                    <div class="form-group">
+                        <label for="quantite">Stock</label>
+                        <input type="number" id="quantite" name="quantite" min="0" value="<?= $stock ?>">
                     </div>
                 </div>
-            </div>
-        </div>
-    </div>
 
-    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
-</body>
-</html>
+                <div class="form-group">
+                    <label for="image">Image</label>
+                    <div class="upload-zone" id="uploadZone">
+                        <input type="file" id="image" name="image" accept="image/*" <?= !$editing ? '' : '' ?>>
+                        <div class="upload-placeholder">
+                            <i class="bi bi-cloud-arrow-up"></i>
+                            <p>Cliquez ou glissez une image</p>
+                        </div>
+                        <div class="upload-preview" id="uploadPreview" style="<?= ($editing && $article['image']) ? '' : 'display:none;' ?>">
+                            <?php if ($editing && $article['image']): ?>
+                                <img src="<?= SITE_URL ?>/uploads/produits/<?= $article['image'] ?>" alt="Preview">
+                            <?php endif; ?>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="form-actions">
+                    <button type="submit" class="btn btn-primary">
+                        <i class="bi bi-check-lg"></i>
+                        <?= $editing ? 'Enregistrer les modifications' : 'Créer l\'article' ?>
+                    </button>
+                </div>
+            </form>
+        </div>
+    </main>
+</div>
+
+<?php require_once '../includes/footer.php'; ?>

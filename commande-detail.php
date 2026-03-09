@@ -1,105 +1,102 @@
 <?php
 require_once 'config/init.php';
 
-if (!isLoggedIn() || !isset($_GET['id'])) {
+if (!isLoggedIn()) redirect('connexion.php');
+
+$id = (int)($_GET['id'] ?? 0);
+if (!$id) redirect('commandes.php');
+
+// Fetch invoice (user or admin)
+if (isAdmin()) {
+    $stmt = $pdo->prepare("SELECT f.*, u.username, u.email FROM factures f JOIN users u ON f.user_id = u.id WHERE f.id = ?");
+    $stmt->execute([$id]);
+} else {
+    $stmt = $pdo->prepare("SELECT f.*, u.username, u.email FROM factures f JOIN users u ON f.user_id = u.id WHERE f.id = ? AND f.user_id = ?");
+    $stmt->execute([$id, $_SESSION['user_id']]);
+}
+$facture = $stmt->fetch();
+
+if (!$facture) {
+    setFlash('error', 'Facture introuvable.');
     redirect('commandes.php');
 }
 
-$stmt = $pdo->prepare("SELECT * FROM commandes WHERE id = ? AND user_id = ?");
-$stmt->execute([$_GET['id'], $_SESSION['user_id']]);
-$commande = $stmt->fetch();
+$pageTitle = 'Facture #' . str_pad($id, 6, '0', STR_PAD_LEFT);
 
-if (!$commande) {
-    redirect('commandes.php');
-}
-
-$stmt = $pdo->prepare("SELECT cd.*, p.nom, p.image FROM commande_details cd JOIN produits p ON cd.produit_id = p.id WHERE cd.commande_id = ?");
-$stmt->execute([$commande['id']]);
-$details = $stmt->fetchAll();
-
-$pageTitle = 'Commande #' . $commande['id'] . ' - ' . SITE_NAME;
+// Fetch details
+$stmtDetails = $pdo->prepare("
+    SELECT fd.*, a.nom, a.image
+    FROM facture_details fd
+    JOIN articles a ON fd.article_id = a.id
+    WHERE fd.facture_id = ?
+");
+$stmtDetails->execute([$id]);
+$details = $stmtDetails->fetchAll();
 
 require_once 'includes/header.php';
 ?>
 
-<div class="container">
-    <nav aria-label="breadcrumb">
-        <ol class="breadcrumb">
-            <li class="breadcrumb-item"><a href="index.php">Accueil</a></li>
-            <li class="breadcrumb-item"><a href="commandes.php">Mes commandes</a></li>
-            <li class="breadcrumb-item active">Commande #<?= $commande['id'] ?></li>
-        </ol>
-    </nav>
+<div class="container" style="padding: 48px 22px 80px;">
+    <div style="margin-bottom: 24px;">
+        <a href="commandes.php" class="btn btn-ghost btn-sm"><i class="bi bi-arrow-left"></i> Retour aux factures</a>
+    </div>
 
-    <div class="row">
-        <div class="col-md-8">
-            <div class="card mb-4">
-                <div class="card-header">
-                    <h5 class="mb-0">Produits commandés</h5>
-                </div>
-                <div class="card-body">
-                    <?php foreach ($details as $detail): ?>
-                    <div class="d-flex align-items-center mb-3 pb-3 border-bottom">
-                        <div style="width: 80px;">
-                            <?php if ($detail['image']): ?>
-                                <img src="uploads/produits/<?= $detail['image'] ?>" class="img-fluid rounded" alt="">
-                            <?php else: ?>
-                                <div class="img-placeholder rounded" style="height:60px;"><i class="fas fa-image"></i></div>
-                            <?php endif; ?>
-                        </div>
-                        <div class="flex-grow-1 ms-3">
-                            <h6 class="mb-0"><?= htmlspecialchars($detail['nom']) ?></h6>
-                            <small class="text-muted">Quantité: <?= $detail['quantite'] ?></small>
-                        </div>
-                        <div class="text-end">
-                            <strong><?= number_format($detail['prix_unitaire'] * $detail['quantite'], 2, ',', ' ') ?> €</strong>
-                        </div>
-                    </div>
-                    <?php endforeach; ?>
-                </div>
+    <div class="invoice fade-in">
+        <div class="invoice-header">
+            <div>
+                <h2 style="font-size: 21px; margin-bottom: 4px;">NOVA</h2>
+                <p class="caption">Facture</p>
+            </div>
+            <div class="invoice-number">
+                <strong>Facture #<?= str_pad($id, 6, '0', STR_PAD_LEFT) ?></strong><br>
+                <span class="caption"><?= date('d/m/Y à H:i', strtotime($facture['date_transaction'])) ?></span>
             </div>
         </div>
 
-        <div class="col-md-4">
-            <div class="card">
-                <div class="card-header">
-                    <h5 class="mb-0">Informations</h5>
-                </div>
-                <div class="card-body">
-                    <p class="mb-2"><strong>Commande n°</strong> <?= $commande['id'] ?></p>
-                    <p class="mb-2"><strong>Date :</strong> <?= date('d/m/Y H:i', strtotime($commande['date_commande'])) ?></p>
-                    <p class="mb-2">
-                        <strong>Statut :</strong>
-                        <?php
-                        $statusClass = [
-                            'en_attente' => 'warning',
-                            'validee' => 'info',
-                            'expediee' => 'primary',
-                            'livree' => 'success',
-                            'annulee' => 'danger'
-                        ];
-                        $statusText = [
-                            'en_attente' => 'En attente',
-                            'validee' => 'Validée',
-                            'expediee' => 'Expédiée',
-                            'livree' => 'Livrée',
-                            'annulee' => 'Annulée'
-                        ];
-                        ?>
-                        <span class="badge bg-<?= $statusClass[$commande['statut']] ?>">
-                            <?= $statusText[$commande['statut']] ?>
-                        </span>
-                    </p>
-                    <hr>
-                    <p class="mb-2"><strong>Adresse de livraison :</strong></p>
-                    <p class="text-muted"><?= nl2br(htmlspecialchars($commande['adresse_livraison'])) ?></p>
-                    <hr>
-                    <div class="d-flex justify-content-between">
-                        <strong>Total</strong>
-                        <strong class="text-primary"><?= number_format($commande['total'], 2, ',', ' ') ?> €</strong>
-                    </div>
-                </div>
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 32px; margin-bottom: 32px;">
+            <div>
+                <p class="eyebrow" style="margin-bottom: 8px;">Client</p>
+                <strong><?= sanitize($facture['username']) ?></strong><br>
+                <span class="caption"><?= sanitize($facture['email']) ?></span>
             </div>
+            <div>
+                <p class="eyebrow" style="margin-bottom: 8px;">Adresse de facturation</p>
+                <p><?= sanitize($facture['adresse']) ?><br>
+                <?= sanitize($facture['code_postal']) ?> <?= sanitize($facture['ville']) ?></p>
+            </div>
+        </div>
+
+        <table class="table" style="margin-bottom: 24px;">
+            <thead>
+                <tr>
+                    <th>Article</th>
+                    <th>Qté</th>
+                    <th>Prix unitaire</th>
+                    <th style="text-align: right;">Total</th>
+                </tr>
+            </thead>
+            <tbody>
+                <?php foreach ($details as $detail): ?>
+                <tr>
+                    <td>
+                        <div style="display: flex; align-items: center; gap: 12px;">
+                            <?php if ($detail['image'] && file_exists("uploads/produits/{$detail['image']}")): ?>
+                                <img src="uploads/produits/<?= sanitize($detail['image']) ?>" alt="" style="width: 40px; height: 40px; border-radius: 8px; object-fit: cover;">
+                            <?php endif; ?>
+                            <a href="produit.php?id=<?= $detail['article_id'] ?>" style="color: inherit;"><?= sanitize($detail['nom']) ?></a>
+                        </div>
+                    </td>
+                    <td><?= $detail['quantite'] ?></td>
+                    <td><?= formatPrice($detail['prix_unitaire']) ?></td>
+                    <td style="text-align: right; font-weight: 600;"><?= formatPrice($detail['prix_unitaire'] * $detail['quantite']) ?></td>
+                </tr>
+                <?php endforeach; ?>
+            </tbody>
+        </table>
+
+        <div style="text-align: right; padding-top: 16px; border-top: 2px solid var(--bg-secondary);">
+            <span class="caption">Total payé</span><br>
+            <span style="font-size: 28px; font-weight: 700;"><?= formatPrice($facture['montant']) ?></span>
         </div>
     </div>
 </div>

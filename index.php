@@ -1,89 +1,172 @@
 <?php
 require_once 'config/init.php';
+$pageTitle = 'Accueil';
 
-$pageTitle = SITE_NAME . ' - Accueil';
+// Fetch latest articles
+$stmt = $pdo->query("
+    SELECT a.*, s.quantite as stock, u.username as auteur_nom, c.nom as categorie_nom,
+        (SELECT AVG(note) FROM commentaires WHERE article_id = a.id) as avg_note,
+        (SELECT COUNT(*) FROM commentaires WHERE article_id = a.id) as nb_avis
+    FROM articles a
+    LEFT JOIN stock s ON a.id = s.article_id
+    LEFT JOIN users u ON a.auteur_id = u.id
+    LEFT JOIN categories c ON a.categorie_id = c.id
+    ORDER BY a.date_publication DESC
+    LIMIT 8
+");
+$articles = $stmt->fetchAll();
 
-$stmt = $pdo->query("SELECT * FROM categories LIMIT 4");
-$categories = $stmt->fetchAll();
+// Featured articles (top 2 most reviewed)
+$stmtFeatured = $pdo->query("
+    SELECT a.*, s.quantite as stock, c.nom as categorie_nom,
+        (SELECT AVG(note) FROM commentaires WHERE article_id = a.id) as avg_note,
+        (SELECT COUNT(*) FROM commentaires WHERE article_id = a.id) as nb_avis
+    FROM articles a
+    LEFT JOIN stock s ON a.id = s.article_id
+    LEFT JOIN categories c ON a.categorie_id = c.id
+    ORDER BY nb_avis DESC, avg_note DESC
+    LIMIT 2
+");
+$featured = $stmtFeatured->fetchAll();
 
-$stmt = $pdo->query("SELECT p.*, c.nom as categorie_nom FROM produits p LEFT JOIN categories c ON p.categorie_id = c.id ORDER BY p.date_ajout DESC LIMIT 8");
-$produits = $stmt->fetchAll();
+// Categories
+$stmtCat = $pdo->query("
+    SELECT c.*, COUNT(a.id) as nb_articles
+    FROM categories c
+    LEFT JOIN articles a ON c.id = a.categorie_id
+    GROUP BY c.id
+    ORDER BY nb_articles DESC
+    LIMIT 6
+");
+$categories = $stmtCat->fetchAll();
 
 require_once 'includes/header.php';
 ?>
 
-<section class="hero-section text-center">
-    <div class="container">
-        <h1>Bienvenue sur <?= SITE_NAME ?></h1>
-        <p class="lead">Découvrez notre sélection de produits de qualité</p>
-        <a href="produits.php" class="btn btn-light btn-lg">Voir nos produits</a>
+<!-- Hero Section -->
+<section class="hero">
+    <div class="hero-content fade-in">
+        <p class="eyebrow">Bienvenue sur NOVA</p>
+        <h1 class="headline-1">L'expérience tech<br>réinventée.</h1>
+        <p>Découvrez, achetez et vendez les meilleurs produits tech sur la marketplace la plus premium du web.</p>
+        <div class="hero-actions">
+            <a href="produits.php" class="btn btn-primary btn-lg">Explorer</a>
+            <?php if (!isLoggedIn()): ?>
+                <a href="inscription.php" class="btn btn-secondary btn-lg" style="border-color: rgba(245,245,247,0.3); color: #f5f5f7;">Créer un compte</a>
+            <?php else: ?>
+                <a href="vendre.php" class="btn btn-secondary btn-lg" style="border-color: rgba(245,245,247,0.3); color: #f5f5f7;">Vendre un article</a>
+            <?php endif; ?>
+        </div>
     </div>
 </section>
 
-<div class="container">
-    <section class="mb-5">
-        <h2 class="mb-4">Nos catégories</h2>
-        <div class="row g-4">
-            <?php foreach ($categories as $cat): ?>
-            <div class="col-md-3">
-                <a href="categorie.php?id=<?= $cat['id'] ?>" class="text-decoration-none">
-                    <div class="category-card">
-                        <?php if ($cat['image']): ?>
-                            <img src="uploads/categories/<?= $cat['image'] ?>" alt="<?= htmlspecialchars($cat['nom']) ?>">
-                        <?php else: ?>
-                            <div class="img-placeholder h-100"><i class="fas fa-image"></i></div>
-                        <?php endif; ?>
-                        <div class="overlay">
-                            <h5 class="mb-0"><?= htmlspecialchars($cat['nom']) ?></h5>
-                        </div>
+<!-- Featured Products -->
+<?php if (count($featured) >= 2): ?>
+<section class="section">
+    <div class="container-wide">
+        <div class="section-header fade-in">
+            <p class="eyebrow">En vedette</p>
+            <h2 class="headline-2">Les incontournables.</h2>
+        </div>
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px;" class="stagger-children">
+            <?php foreach ($featured as $feat): ?>
+            <a href="produit.php?id=<?= $feat['id'] ?>" class="card-featured" style="text-decoration: none; color: inherit;">
+                <p class="eyebrow"><?= sanitize($feat['categorie_nom'] ?? 'Nouveauté') ?></p>
+                <h3 class="headline-3"><?= sanitize($feat['nom']) ?></h3>
+                <p class="body-text text-secondary">À partir de <?= formatPrice($feat['prix']) ?></p>
+                <?php if ($feat['image'] && file_exists("uploads/produits/{$feat['image']}")): ?>
+                    <img src="uploads/produits/<?= sanitize($feat['image']) ?>" alt="<?= sanitize($feat['nom']) ?>" class="card-featured-img">
+                <?php else: ?>
+                    <div style="width: 200px; height: 200px; background: rgba(0,0,0,0.04); border-radius: 50%; margin: 30px 0; display: flex; align-items: center; justify-content: center;">
+                        <i class="bi bi-box-seam" style="font-size: 60px; color: var(--text-tertiary);"></i>
                     </div>
-                </a>
-            </div>
+                <?php endif; ?>
+            </a>
             <?php endforeach; ?>
         </div>
-    </section>
+    </div>
+</section>
+<?php endif; ?>
 
-    <section class="mb-5">
-        <div class="d-flex justify-content-between align-items-center mb-4">
-            <h2>Nouveautés</h2>
-            <a href="produits.php" class="btn btn-outline-primary">Voir tout</a>
+<!-- Categories -->
+<section class="section-alt">
+    <div class="container-wide">
+        <div class="section-header fade-in">
+            <p class="eyebrow">Catégories</p>
+            <h2 class="headline-2">Explorez par univers.</h2>
         </div>
-        <div class="row g-4">
-            <?php foreach ($produits as $produit): ?>
-            <div class="col-md-3">
-                <div class="card card-product">
-                    <?php if ($produit['image']): ?>
-                        <img src="uploads/produits/<?= $produit['image'] ?>" class="card-img-top" alt="<?= htmlspecialchars($produit['nom']) ?>">
-                    <?php else: ?>
-                        <div class="card-img-top img-placeholder" style="height:200px;"><i class="fas fa-image"></i></div>
-                    <?php endif; ?>
-                    <div class="card-body">
-                        <span class="badge bg-secondary mb-2"><?= htmlspecialchars($produit['categorie_nom'] ?? 'Non classé') ?></span>
-                        <h5 class="card-title"><?= htmlspecialchars($produit['nom']) ?></h5>
-                        <p class="price"><?= number_format($produit['prix'], 2, ',', ' ') ?> €</p>
-                        <?php if ($produit['stock'] > 0): ?>
-                            <span class="badge bg-success stock-badge mb-2">En stock</span>
-                        <?php else: ?>
-                            <span class="badge bg-danger stock-badge mb-2">Rupture</span>
+        <div class="category-grid stagger-children">
+            <?php foreach ($categories as $cat): ?>
+            <a href="categorie.php?id=<?= $cat['id'] ?>" class="category-card">
+                <?php if ($cat['image'] && file_exists("uploads/categories/{$cat['image']}")): ?>
+                    <img src="uploads/categories/<?= sanitize($cat['image']) ?>" alt="<?= sanitize($cat['nom']) ?>">
+                <?php else: ?>
+                    <div style="position: absolute; inset: 0; background: var(--gradient-1);"></div>
+                <?php endif; ?>
+                <div class="category-info">
+                    <h3><?= sanitize($cat['nom']) ?></h3>
+                    <p><?= $cat['nb_articles'] ?> article<?= $cat['nb_articles'] > 1 ? 's' : '' ?></p>
+                </div>
+            </a>
+            <?php endforeach; ?>
+        </div>
+    </div>
+</section>
+
+<!-- Latest Articles -->
+<section class="section">
+    <div class="container-wide">
+        <div class="section-header fade-in">
+            <p class="eyebrow">Nouveautés</p>
+            <h2 class="headline-2">Ajoutés récemment.</h2>
+            <p>Les derniers articles mis en vente par notre communauté.</p>
+        </div>
+        <div class="product-grid stagger-children">
+            <?php foreach ($articles as $article): ?>
+            <a href="produit.php?id=<?= $article['id'] ?>" class="card" style="text-decoration: none; color: inherit;">
+                <?php if ($article['image'] && file_exists("uploads/produits/{$article['image']}")): ?>
+                    <img src="uploads/produits/<?= sanitize($article['image']) ?>" alt="<?= sanitize($article['nom']) ?>" class="card-img">
+                <?php else: ?>
+                    <div class="card-img" style="display: flex; align-items: center; justify-content: center; background: var(--bg-secondary);">
+                        <i class="bi bi-box-seam" style="font-size: 40px; color: var(--text-tertiary);"></i>
+                    </div>
+                <?php endif; ?>
+                <div class="card-body">
+                    <p class="eyebrow"><?= sanitize($article['categorie_nom'] ?? 'Article') ?></p>
+                    <h3><?= sanitize($article['nom']) ?></h3>
+                    <div class="card-meta">
+                        <span class="price"><?= formatPrice($article['prix']) ?></span>
+                        <?php if ($article['avg_note']): ?>
+                            <span class="caption" style="display: flex; align-items: center; gap: 4px;">
+                                <i class="bi bi-star-fill" style="color: #ff9f0a;"></i>
+                                <?= round($article['avg_note'], 1) ?>
+                            </span>
                         <?php endif; ?>
-                        <div class="d-grid gap-2">
-                            <a href="produit.php?id=<?= $produit['id'] ?>" class="btn btn-outline-primary btn-sm">Voir détails</a>
-                            <?php if ($produit['stock'] > 0): ?>
-                            <form action="ajax/add_cart.php" method="POST" class="add-to-cart-form">
-                                <input type="hidden" name="produit_id" value="<?= $produit['id'] ?>">
-                                <input type="hidden" name="quantite" value="1">
-                                <button type="submit" class="btn btn-primary btn-sm w-100">
-                                    <i class="fas fa-cart-plus"></i> Ajouter
-                                </button>
-                            </form>
-                            <?php endif; ?>
-                        </div>
                     </div>
                 </div>
-            </div>
+            </a>
             <?php endforeach; ?>
         </div>
-    </section>
-</div>
+        <div class="text-center mt-4 fade-in">
+            <a href="produits.php" class="btn btn-secondary">Voir tous les articles <i class="bi bi-arrow-right"></i></a>
+        </div>
+    </div>
+</section>
+
+<!-- CTA Section -->
+<section class="section-dark">
+    <div class="container" style="text-align: center;">
+        <div class="fade-in">
+            <p class="eyebrow" style="color: rgba(245,245,247,0.5);">Rejoignez NOVA</p>
+            <h2 class="headline-2" style="margin-bottom: 16px;">Prêt à vendre ?</h2>
+            <p class="body-large" style="color: rgba(245,245,247,0.6); max-width: 500px; margin: 0 auto 32px;">Listez vos articles tech en quelques clics et rejoignez une communauté de passionnés.</p>
+            <?php if (isLoggedIn()): ?>
+                <a href="vendre.php" class="btn btn-primary btn-lg">Mettre en vente</a>
+            <?php else: ?>
+                <a href="inscription.php" class="btn btn-primary btn-lg">Créer un compte gratuitement</a>
+            <?php endif; ?>
+        </div>
+    </div>
+</section>
 
 <?php require_once 'includes/footer.php'; ?>

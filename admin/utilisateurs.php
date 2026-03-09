@@ -5,101 +5,163 @@ if (!isAdmin()) {
     redirect('../connexion.php');
 }
 
-$pageTitle = 'Gestion des utilisateurs - ' . SITE_NAME;
+$pageTitle = 'Gestion des utilisateurs';
 
-if (isset($_GET['delete']) && $_GET['delete'] != $_SESSION['user_id']) {
-    $stmt = $pdo->prepare("DELETE FROM users WHERE id = ?");
-    $stmt->execute([$_GET['delete']]);
+// Change role
+if (isset($_GET['toggle_role'])) {
+    $id = (int) $_GET['toggle_role'];
+    if ($id !== $_SESSION['user_id']) { // Can't change own role
+        $stmt = $pdo->prepare("SELECT role FROM users WHERE id = ?");
+        $stmt->execute([$id]);
+        $user = $stmt->fetch();
+        if ($user) {
+            $newRole = $user['role'] === 'admin' ? 'user' : 'admin';
+            $pdo->prepare("UPDATE users SET role = ? WHERE id = ?")->execute([$newRole, $id]);
+            setFlash('success', 'Rôle mis à jour.');
+        }
+    }
     redirect('utilisateurs.php');
 }
 
-$stmt = $pdo->query("SELECT u.*, (SELECT COUNT(*) FROM commandes WHERE user_id = u.id) as nb_commandes FROM users u ORDER BY u.date_inscription DESC");
-$utilisateurs = $stmt->fetchAll();
+// Delete user
+if (isset($_GET['delete'])) {
+    $id = (int) $_GET['delete'];
+    if ($id !== $_SESSION['user_id']) { // Can't delete self
+        // Delete user's data
+        $pdo->prepare("DELETE FROM commentaires WHERE user_id = ?")->execute([$id]);
+        $pdo->prepare("DELETE FROM favoris WHERE user_id = ?")->execute([$id]);
+        $pdo->prepare("DELETE FROM panier WHERE user_id = ?")->execute([$id]);
+        
+        // Delete user's articles (and their related data)
+        $articles = $pdo->prepare("SELECT id FROM articles WHERE auteur_id = ?");
+        $articles->execute([$id]);
+        foreach ($articles->fetchAll() as $art) {
+            $pdo->prepare("DELETE FROM stock WHERE article_id = ?")->execute([$art['id']]);
+            $pdo->prepare("DELETE FROM commentaires WHERE article_id = ?")->execute([$art['id']]);
+            $pdo->prepare("DELETE FROM favoris WHERE article_id = ?")->execute([$art['id']]);
+            $pdo->prepare("DELETE FROM panier WHERE article_id = ?")->execute([$art['id']]);
+        }
+        $pdo->prepare("DELETE FROM articles WHERE auteur_id = ?")->execute([$id]);
+        
+        // Delete user photo
+        $stmt = $pdo->prepare("SELECT photo FROM users WHERE id = ?");
+        $stmt->execute([$id]);
+        $u = $stmt->fetch();
+        if ($u && $u['photo']) {
+            $path = UPLOAD_DIR . 'produits/' . $u['photo'];
+            if (file_exists($path)) unlink($path);
+        }
+        
+        $pdo->prepare("DELETE FROM users WHERE id = ?")->execute([$id]);
+        setFlash('success', 'Utilisateur supprimé.');
+    } else {
+        setFlash('error', 'Vous ne pouvez pas supprimer votre propre compte.');
+    }
+    redirect('utilisateurs.php');
+}
+
+$users = $pdo->query("
+    SELECT u.*, 
+        (SELECT COUNT(*) FROM articles WHERE auteur_id = u.id) AS article_count,
+        (SELECT COUNT(*) FROM factures WHERE user_id = u.id) AS facture_count
+    FROM users u
+    ORDER BY u.date_inscription DESC
+")->fetchAll();
+
+require_once '../includes/header.php';
 ?>
-<!DOCTYPE html>
-<html lang="fr">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title><?= $pageTitle ?></title>
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
-    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
-    <link href="<?= SITE_URL ?>/assets/css/style.css" rel="stylesheet">
-</head>
-<body>
-    <nav class="navbar navbar-expand-lg navbar-dark bg-dark">
-        <div class="container-fluid">
-            <a class="navbar-brand" href="<?= SITE_URL ?>/admin/">
-                <i class="fas fa-cog"></i> Admin - <?= SITE_NAME ?>
+
+<div class="admin-layout">
+    <aside class="admin-sidebar">
+        <div class="admin-sidebar-header">
+            <h3><i class="bi bi-gear-fill"></i> Admin</h3>
+        </div>
+        <nav class="admin-nav">
+            <a href="<?= SITE_URL ?>/admin/index.php" class="admin-nav-link">
+                <i class="bi bi-speedometer2"></i> Tableau de bord
             </a>
-            <div class="navbar-nav ms-auto">
-                <a class="nav-link" href="<?= SITE_URL ?>"><i class="fas fa-external-link-alt"></i> Voir le site</a>
-                <a class="nav-link" href="<?= SITE_URL ?>/deconnexion.php"><i class="fas fa-sign-out-alt"></i> Déconnexion</a>
-            </div>
+            <a href="<?= SITE_URL ?>/admin/produits.php" class="admin-nav-link">
+                <i class="bi bi-box-seam"></i> Articles
+            </a>
+            <a href="<?= SITE_URL ?>/admin/categories.php" class="admin-nav-link">
+                <i class="bi bi-grid"></i> Catégories
+            </a>
+            <a href="<?= SITE_URL ?>/admin/commandes.php" class="admin-nav-link">
+                <i class="bi bi-receipt"></i> Factures
+            </a>
+            <a href="<?= SITE_URL ?>/admin/utilisateurs.php" class="admin-nav-link active">
+                <i class="bi bi-people"></i> Utilisateurs
+            </a>
+            <hr>
+            <a href="<?= SITE_URL ?>/index.php" class="admin-nav-link">
+                <i class="bi bi-arrow-left"></i> Retour au site
+            </a>
+        </nav>
+    </aside>
+
+    <main class="admin-main">
+        <div class="admin-header">
+            <h1>Utilisateurs</h1>
         </div>
-    </nav>
 
-    <div class="container-fluid">
-        <div class="row">
-            <div class="col-md-2 admin-sidebar py-3">
-                <nav class="nav flex-column">
-                    <a class="nav-link" href="index.php"><i class="fas fa-tachometer-alt me-2"></i>Tableau de bord</a>
-                    <a class="nav-link" href="produits.php"><i class="fas fa-box me-2"></i>Produits</a>
-                    <a class="nav-link" href="categories.php"><i class="fas fa-tags me-2"></i>Catégories</a>
-                    <a class="nav-link" href="commandes.php"><i class="fas fa-shopping-cart me-2"></i>Commandes</a>
-                    <a class="nav-link active" href="utilisateurs.php"><i class="fas fa-users me-2"></i>Utilisateurs</a>
-                </nav>
-            </div>
-
-            <div class="col-md-10 py-4">
-                <h1 class="mb-4">Gestion des utilisateurs</h1>
-
-                <div class="card">
-                    <div class="card-body">
-                        <div class="table-responsive">
-                            <table class="table table-hover">
-                                <thead class="table-dark">
-                                    <tr>
-                                        <th>ID</th>
-                                        <th>Nom</th>
-                                        <th>Email</th>
-                                        <th>Rôle</th>
-                                        <th>Commandes</th>
-                                        <th>Inscription</th>
-                                        <th>Actions</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    <?php foreach ($utilisateurs as $user): ?>
-                                    <tr>
-                                        <td><?= $user['id'] ?></td>
-                                        <td><?= htmlspecialchars($user['prenom'] . ' ' . $user['nom']) ?></td>
-                                        <td><?= htmlspecialchars($user['email']) ?></td>
-                                        <td>
-                                            <span class="badge bg-<?= $user['role'] == 'admin' ? 'danger' : 'primary' ?>">
-                                                <?= $user['role'] ?>
-                                            </span>
-                                        </td>
-                                        <td><span class="badge bg-secondary"><?= $user['nb_commandes'] ?></span></td>
-                                        <td><?= date('d/m/Y', strtotime($user['date_inscription'])) ?></td>
-                                        <td>
-                                            <?php if ($user['id'] != $_SESSION['user_id']): ?>
-                                                <a href="utilisateurs.php?delete=<?= $user['id'] ?>" class="btn btn-sm btn-outline-danger" onclick="return confirm('Supprimer cet utilisateur ?')">
-                                                    <i class="fas fa-trash"></i>
-                                                </a>
-                                            <?php endif; ?>
-                                        </td>
-                                    </tr>
-                                    <?php endforeach; ?>
-                                </tbody>
-                            </table>
-                        </div>
-                    </div>
-                </div>
-            </div>
+        <div class="admin-card fade-in">
+            <table class="admin-table">
+                <thead>
+                    <tr>
+                        <th>Photo</th>
+                        <th>Nom d'utilisateur</th>
+                        <th>Email</th>
+                        <th>Solde</th>
+                        <th>Articles</th>
+                        <th>Achats</th>
+                        <th>Rôle</th>
+                        <th>Inscrit le</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <?php foreach ($users as $user): ?>
+                        <tr>
+                            <td>
+                                <?php if ($user['photo']): ?>
+                                    <img src="<?= SITE_URL ?>/uploads/produits/<?= $user['photo'] ?>" alt="" style="width:40px;height:40px;object-fit:cover;border-radius:50%;">
+                                <?php else: ?>
+                                    <div style="width:40px;height:40px;background:var(--accent-gradient);border-radius:50%;display:flex;align-items:center;justify-content:center;color:white;font-weight:600;font-size:0.875rem;">
+                                        <?= strtoupper(substr($user['username'], 0, 1)) ?>
+                                    </div>
+                                <?php endif; ?>
+                            </td>
+                            <td><strong><?= sanitize($user['username']) ?></strong></td>
+                            <td><?= sanitize($user['email']) ?></td>
+                            <td><?= formatPrice($user['balance']) ?></td>
+                            <td><span class="badge badge-default"><?= $user['article_count'] ?></span></td>
+                            <td><span class="badge badge-default"><?= $user['facture_count'] ?></span></td>
+                            <td>
+                                <span class="badge <?= $user['role'] === 'admin' ? 'badge-primary' : 'badge-default' ?>">
+                                    <?= $user['role'] ?>
+                                </span>
+                            </td>
+                            <td><?= date('d/m/Y', strtotime($user['date_inscription'])) ?></td>
+                            <td>
+                                <div style="display:flex;gap:0.5rem;">
+                                    <?php if ($user['id'] !== $_SESSION['user_id']): ?>
+                                        <a href="<?= SITE_URL ?>/admin/utilisateurs.php?toggle_role=<?= $user['id'] ?>" class="btn-small" title="Changer le rôle" onclick="return confirm('Changer le rôle de cet utilisateur ?')">
+                                            <i class="bi bi-shield"></i>
+                                        </a>
+                                        <a href="<?= SITE_URL ?>/admin/utilisateurs.php?delete=<?= $user['id'] ?>" class="btn-small btn-danger" onclick="return confirm('Supprimer cet utilisateur et toutes ses données ?')" title="Supprimer">
+                                            <i class="bi bi-trash"></i>
+                                        </a>
+                                    <?php else: ?>
+                                        <span style="color:#86868b;font-size:0.75rem;">Vous</span>
+                                    <?php endif; ?>
+                                </div>
+                            </td>
+                        </tr>
+                    <?php endforeach; ?>
+                </tbody>
+            </table>
         </div>
-    </div>
+    </main>
+</div>
 
-    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
-</body>
-</html>
+<?php require_once '../includes/footer.php'; ?>

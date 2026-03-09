@@ -1,22 +1,15 @@
 <?php
 require_once 'config/init.php';
+$pageTitle = 'Contact';
 
-$pageTitle = 'Contact - ' . SITE_NAME;
 $success = false;
-$errors = [];
-
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $nom = sanitize($_POST['nom'] ?? '');
     $email = sanitize($_POST['email'] ?? '');
     $sujet = sanitize($_POST['sujet'] ?? '');
     $message = sanitize($_POST['message'] ?? '');
 
-    if (empty($nom)) $errors[] = "Le nom est requis.";
-    if (empty($email) || !filter_var($email, FILTER_VALIDATE_EMAIL)) $errors[] = "Email invalide.";
-    if (empty($sujet)) $errors[] = "Le sujet est requis.";
-    if (empty($message)) $errors[] = "Le message est requis.";
-
-    if (empty($errors)) {
+    if (!empty($nom) && !empty($email) && !empty($message)) {
         $success = true;
     }
 }
@@ -24,64 +17,70 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 require_once 'includes/header.php';
 ?>
 
-<div class="container">
-    <h1 class="mb-4">Contactez-nous</h1>
+<div class="page-hero">
+    <div class="container">
+        <h1 class="fade-in">Contact</h1>
+        <p class="fade-in">Une question ? Nous sommes là pour vous aider.</p>
+    </div>
+</div>
 
-    <div class="row">
-        <div class="col-md-6">
+<div class="container-wide">
+    <div class="contact-grid">
+        <div class="fade-in">
             <?php if ($success): ?>
-                <div class="alert alert-success">
-                    <i class="fas fa-check-circle"></i> Votre message a bien été envoyé. Nous vous répondrons dans les plus brefs délais.
+                <div style="text-align: center; padding: 60px 0;">
+                    <div style="width: 64px; height: 64px; border-radius: 50%; background: rgba(48,209,88,0.1); display: flex; align-items: center; justify-content: center; margin: 0 auto 20px;">
+                        <i class="bi bi-check-lg" style="font-size: 28px; color: var(--success);"></i>
+                    </div>
+                    <h3 class="headline-4">Message envoyé !</h3>
+                    <p class="text-secondary mt-2">Nous vous répondrons dans les plus brefs délais.</p>
                 </div>
             <?php else: ?>
-                <?php if (!empty($errors)): ?>
-                    <div class="alert alert-danger">
-                        <ul class="mb-0">
-                            <?php foreach ($errors as $error): ?>
-                                <li><?= $error ?></li>
-                            <?php endforeach; ?>
-                        </ul>
-                    </div>
-                <?php endif; ?>
-
                 <form method="POST">
-                    <div class="mb-3">
+                    <div class="form-group">
                         <label class="form-label">Nom</label>
-                        <input type="text" name="nom" class="form-control" value="<?= htmlspecialchars($_POST['nom'] ?? '') ?>" required>
+                        <input type="text" name="nom" class="form-control" placeholder="Votre nom" required>
                     </div>
-                    <div class="mb-3">
+                    <div class="form-group">
                         <label class="form-label">Email</label>
-                        <input type="email" name="email" class="form-control" value="<?= htmlspecialchars($_POST['email'] ?? '') ?>" required>
+                        <input type="email" name="email" class="form-control" placeholder="votre@email.com" required>
                     </div>
-                    <div class="mb-3">
+                    <div class="form-group">
                         <label class="form-label">Sujet</label>
-                        <input type="text" name="sujet" class="form-control" value="<?= htmlspecialchars($_POST['sujet'] ?? '') ?>" required>
+                        <input type="text" name="sujet" class="form-control" placeholder="Objet de votre message">
                     </div>
-                    <div class="mb-3">
+                    <div class="form-group">
                         <label class="form-label">Message</label>
-                        <textarea name="message" class="form-control" rows="5" required><?= htmlspecialchars($_POST['message'] ?? '') ?></textarea>
+                        <textarea name="message" class="form-control" placeholder="Votre message..." rows="5" required></textarea>
                     </div>
-                    <button type="submit" class="btn btn-primary">
-                        <i class="fas fa-paper-plane"></i> Envoyer
-                    </button>
+                    <button type="submit" class="btn btn-primary">Envoyer le message</button>
                 </form>
             <?php endif; ?>
         </div>
 
-        <div class="col-md-6">
-            <div class="card">
-                <div class="card-body">
-                    <h5><i class="fas fa-map-marker-alt text-primary"></i> Adresse</h5>
-                    <p>123 Rue du Commerce<br>75001 Paris, France</p>
+        <div class="contact-info fade-in">
+            <h3>Informations de contact</h3>
+            <p>N'hésitez pas à nous contacter par email ou via le formulaire ci-contre.</p>
 
-                    <h5><i class="fas fa-phone text-primary"></i> Téléphone</h5>
-                    <p>01 23 45 67 89</p>
-
-                    <h5><i class="fas fa-envelope text-primary"></i> Email</h5>
-                    <p>contact@monshop.com</p>
-
-                    <h5><i class="fas fa-clock text-primary"></i> Horaires</h5>
-                    <p>Lundi - Vendredi : 9h - 18h<br>Samedi : 10h - 16h</p>
+            <div class="contact-info-item">
+                <i class="bi bi-envelope"></i>
+                <div>
+                    <strong>Email</strong>
+                    <p>contact@nova-market.com</p>
+                </div>
+            </div>
+            <div class="contact-info-item">
+                <i class="bi bi-clock"></i>
+                <div>
+                    <strong>Horaires</strong>
+                    <p>Lundi - Vendredi, 9h - 18h</p>
+                </div>
+            </div>
+            <div class="contact-info-item">
+                <i class="bi bi-geo-alt"></i>
+                <div>
+                    <strong>Adresse</strong>
+                    <p>42 Rue de l'Innovation<br>75001 Paris, France</p>
                 </div>
             </div>
         </div>

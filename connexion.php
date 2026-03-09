@@ -1,41 +1,37 @@
 <?php
 require_once 'config/init.php';
+$pageTitle = 'Connexion';
 
-if (isLoggedIn()) {
-    redirect('index.php');
-}
+if (isLoggedIn()) redirect('compte.php');
 
-$pageTitle = 'Connexion - ' . SITE_NAME;
-$error = '';
+$errors = [];
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $email = sanitize($_POST['email'] ?? '');
     $password = $_POST['password'] ?? '';
 
     if (empty($email) || empty($password)) {
-        $error = "Veuillez remplir tous les champs.";
-    } else {
+        $errors[] = 'Tous les champs sont requis.';
+    }
+
+    if (empty($errors)) {
         $stmt = $pdo->prepare("SELECT * FROM users WHERE email = ?");
         $stmt->execute([$email]);
         $user = $stmt->fetch();
 
         if ($user && password_verify($password, $user['password'])) {
             $_SESSION['user_id'] = $user['id'];
-            $_SESSION['user_nom'] = $user['nom'];
-            $_SESSION['user_prenom'] = $user['prenom'];
-            $_SESSION['user_email'] = $user['email'];
+            $_SESSION['username'] = $user['username'];
             $_SESSION['user_role'] = $user['role'];
 
-            $stmt = $pdo->prepare("UPDATE panier SET user_id = ?, session_id = NULL WHERE session_id = ?");
-            $stmt->execute([$user['id'], session_id()]);
+            // Transfer session cart to user cart
+            $stmtTransfer = $pdo->prepare("UPDATE panier SET user_id = ?, session_id = NULL WHERE session_id = ?");
+            $stmtTransfer->execute([$user['id'], session_id()]);
 
-            if ($user['role'] === 'admin') {
-                redirect('admin/');
-            } else {
-                redirect('index.php');
-            }
+            setFlash('success', 'Bienvenue, ' . $user['username'] . ' !');
+            redirect('index.php');
         } else {
-            $error = "Email ou mot de passe incorrect.";
+            $errors[] = 'Email ou mot de passe incorrect.';
         }
     }
 }
@@ -43,38 +39,34 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 require_once 'includes/header.php';
 ?>
 
-<div class="container">
-    <div class="row justify-content-center">
-        <div class="col-md-5">
-            <div class="card">
-                <div class="card-header">
-                    <h4 class="mb-0">Connexion</h4>
-                </div>
-                <div class="card-body">
-                    <?php if ($error): ?>
-                        <div class="alert alert-danger"><?= $error ?></div>
-                    <?php endif; ?>
+<section class="section-alt" style="min-height: calc(100vh - var(--nav-height)); display: flex; align-items: center;">
+    <div class="container">
+        <div class="form-card fade-in">
+            <h2>Connexion</h2>
+            <p class="form-subtitle">Content de vous revoir sur NOVA.</p>
 
-                    <form method="POST">
-                        <div class="mb-3">
-                            <label class="form-label">Email</label>
-                            <input type="email" name="email" class="form-control" value="<?= htmlspecialchars($_POST['email'] ?? '') ?>" required>
-                        </div>
-                        <div class="mb-3">
-                            <label class="form-label">Mot de passe</label>
-                            <input type="password" name="password" class="form-control" required>
-                        </div>
-                        <button type="submit" class="btn btn-primary w-100">Se connecter</button>
-                    </form>
-
-                    <hr>
-                    <p class="text-center mb-0">
-                        Pas encore de compte ? <a href="inscription.php">Inscrivez-vous</a>
-                    </p>
+            <?php if ($errors): ?>
+                <div class="flash flash-error" style="position: static; animation: none; margin-bottom: 20px;">
+                    <?= implode('<br>', array_map('sanitize', $errors)) ?>
                 </div>
-            </div>
+            <?php endif; ?>
+
+            <form method="POST">
+                <div class="form-group">
+                    <label class="form-label">Email</label>
+                    <input type="email" name="email" class="form-control" placeholder="votre@email.com" value="<?= sanitize($email ?? '') ?>" required>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Mot de passe</label>
+                    <input type="password" name="password" class="form-control" placeholder="••••••••" required>
+                </div>
+                <button type="submit" class="btn btn-primary">Se connecter</button>
+            </form>
+            <p class="form-footer">
+                Pas encore de compte ? <a href="inscription.php">Créer un compte</a>
+            </p>
         </div>
     </div>
-</div>
+</section>
 
 <?php require_once 'includes/footer.php'; ?>

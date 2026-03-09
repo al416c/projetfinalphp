@@ -5,158 +5,127 @@ if (!isAdmin()) {
     redirect('../connexion.php');
 }
 
-if (!isset($_GET['id'])) {
+$id = (int) ($_GET['id'] ?? 0);
+if ($id <= 0) redirect('commandes.php');
+
+$stmt = $pdo->prepare("
+    SELECT f.*, u.username, u.email
+    FROM factures f
+    JOIN users u ON f.user_id = u.id
+    WHERE f.id = ?
+");
+$stmt->execute([$id]);
+$facture = $stmt->fetch();
+
+if (!$facture) {
     redirect('commandes.php');
 }
 
-$stmt = $pdo->prepare("SELECT c.*, u.nom, u.prenom, u.email, u.telephone FROM commandes c JOIN users u ON c.user_id = u.id WHERE c.id = ?");
-$stmt->execute([$_GET['id']]);
-$commande = $stmt->fetch();
-
-if (!$commande) {
-    redirect('commandes.php');
-}
-
-$stmt = $pdo->prepare("SELECT cd.*, p.nom, p.image FROM commande_details cd JOIN produits p ON cd.produit_id = p.id WHERE cd.commande_id = ?");
-$stmt->execute([$commande['id']]);
+$stmt = $pdo->prepare("
+    SELECT fd.*, a.nom, a.image
+    FROM facture_details fd
+    JOIN articles a ON fd.article_id = a.id
+    WHERE fd.facture_id = ?
+");
+$stmt->execute([$id]);
 $details = $stmt->fetchAll();
 
-$pageTitle = 'Commande #' . $commande['id'] . ' - ' . SITE_NAME;
+$pageTitle = 'Facture #' . $facture['id'];
+require_once '../includes/header.php';
 ?>
-<!DOCTYPE html>
-<html lang="fr">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title><?= $pageTitle ?></title>
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
-    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
-    <link href="<?= SITE_URL ?>/assets/css/style.css" rel="stylesheet">
-</head>
-<body>
-    <nav class="navbar navbar-expand-lg navbar-dark bg-dark">
-        <div class="container-fluid">
-            <a class="navbar-brand" href="<?= SITE_URL ?>/admin/">
-                <i class="fas fa-cog"></i> Admin - <?= SITE_NAME ?>
+
+<div class="admin-layout">
+    <aside class="admin-sidebar">
+        <div class="admin-sidebar-header">
+            <h3><i class="bi bi-gear-fill"></i> Admin</h3>
+        </div>
+        <nav class="admin-nav">
+            <a href="<?= SITE_URL ?>/admin/index.php" class="admin-nav-link">
+                <i class="bi bi-speedometer2"></i> Tableau de bord
             </a>
-            <div class="navbar-nav ms-auto">
-                <a class="nav-link" href="<?= SITE_URL ?>"><i class="fas fa-external-link-alt"></i> Voir le site</a>
-                <a class="nav-link" href="<?= SITE_URL ?>/deconnexion.php"><i class="fas fa-sign-out-alt"></i> Déconnexion</a>
+            <a href="<?= SITE_URL ?>/admin/produits.php" class="admin-nav-link">
+                <i class="bi bi-box-seam"></i> Articles
+            </a>
+            <a href="<?= SITE_URL ?>/admin/categories.php" class="admin-nav-link">
+                <i class="bi bi-grid"></i> Catégories
+            </a>
+            <a href="<?= SITE_URL ?>/admin/commandes.php" class="admin-nav-link active">
+                <i class="bi bi-receipt"></i> Factures
+            </a>
+            <a href="<?= SITE_URL ?>/admin/utilisateurs.php" class="admin-nav-link">
+                <i class="bi bi-people"></i> Utilisateurs
+            </a>
+            <hr>
+            <a href="<?= SITE_URL ?>/index.php" class="admin-nav-link">
+                <i class="bi bi-arrow-left"></i> Retour au site
+            </a>
+        </nav>
+    </aside>
+
+    <main class="admin-main">
+        <div class="admin-header">
+            <h1>Facture #<?= $facture['id'] ?></h1>
+            <a href="<?= SITE_URL ?>/admin/commandes.php" class="btn btn-secondary">
+                <i class="bi bi-arrow-left"></i> Retour
+            </a>
+        </div>
+
+        <div class="admin-grid fade-in">
+            <div class="admin-card">
+                <h3><i class="bi bi-person"></i> Client</h3>
+                <p><strong><?= sanitize($facture['username']) ?></strong></p>
+                <p><?= sanitize($facture['email']) ?></p>
+            </div>
+            <div class="admin-card">
+                <h3><i class="bi bi-geo-alt"></i> Adresse de facturation</h3>
+                <p><?= sanitize($facture['adresse']) ?></p>
+                <p><?= sanitize($facture['code_postal']) ?> <?= sanitize($facture['ville']) ?></p>
+            </div>
+            <div class="admin-card">
+                <h3><i class="bi bi-info-circle"></i> Informations</h3>
+                <p>Date : <?= date('d/m/Y à H:i', strtotime($facture['date_facture'])) ?></p>
+                <p>Total : <strong><?= formatPrice($facture['total']) ?></strong></p>
             </div>
         </div>
-    </nav>
 
-    <div class="container-fluid">
-        <div class="row">
-            <div class="col-md-2 admin-sidebar py-3">
-                <nav class="nav flex-column">
-                    <a class="nav-link" href="index.php"><i class="fas fa-tachometer-alt me-2"></i>Tableau de bord</a>
-                    <a class="nav-link" href="produits.php"><i class="fas fa-box me-2"></i>Produits</a>
-                    <a class="nav-link" href="categories.php"><i class="fas fa-tags me-2"></i>Catégories</a>
-                    <a class="nav-link active" href="commandes.php"><i class="fas fa-shopping-cart me-2"></i>Commandes</a>
-                    <a class="nav-link" href="utilisateurs.php"><i class="fas fa-users me-2"></i>Utilisateurs</a>
-                </nav>
-            </div>
-
-            <div class="col-md-10 py-4">
-                <div class="d-flex justify-content-between align-items-center mb-4">
-                    <h1>Commande #<?= $commande['id'] ?></h1>
-                    <a href="commandes.php" class="btn btn-outline-secondary"><i class="fas fa-arrow-left"></i> Retour</a>
-                </div>
-
-                <div class="row">
-                    <div class="col-md-8">
-                        <div class="card mb-4">
-                            <div class="card-header">
-                                <h5 class="mb-0">Produits commandés</h5>
-                            </div>
-                            <div class="card-body">
-                                <div class="table-responsive">
-                                    <table class="table">
-                                        <thead>
-                                            <tr>
-                                                <th>Produit</th>
-                                                <th>Prix unitaire</th>
-                                                <th>Quantité</th>
-                                                <th>Total</th>
-                                            </tr>
-                                        </thead>
-                                        <tbody>
-                                            <?php foreach ($details as $detail): ?>
-                                            <tr>
-                                                <td>
-                                                    <div class="d-flex align-items-center">
-                                                        <?php if ($detail['image']): ?>
-                                                            <img src="<?= SITE_URL ?>/uploads/produits/<?= $detail['image'] ?>" width="40" height="40" class="rounded me-2" style="object-fit:cover;">
-                                                        <?php endif; ?>
-                                                        <?= htmlspecialchars($detail['nom']) ?>
-                                                    </div>
-                                                </td>
-                                                <td><?= number_format($detail['prix_unitaire'], 2, ',', ' ') ?> €</td>
-                                                <td><?= $detail['quantite'] ?></td>
-                                                <td><?= number_format($detail['prix_unitaire'] * $detail['quantite'], 2, ',', ' ') ?> €</td>
-                                            </tr>
-                                            <?php endforeach; ?>
-                                        </tbody>
-                                        <tfoot>
-                                            <tr>
-                                                <th colspan="3" class="text-end">Total</th>
-                                                <th><?= number_format($commande['total'], 2, ',', ' ') ?> €</th>
-                                            </tr>
-                                        </tfoot>
-                                    </table>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-
-                    <div class="col-md-4">
-                        <div class="card mb-4">
-                            <div class="card-header">
-                                <h5 class="mb-0">Informations client</h5>
-                            </div>
-                            <div class="card-body">
-                                <p class="mb-1"><strong>Nom :</strong> <?= htmlspecialchars($commande['prenom'] . ' ' . $commande['nom']) ?></p>
-                                <p class="mb-1"><strong>Email :</strong> <?= htmlspecialchars($commande['email']) ?></p>
-                                <p class="mb-0"><strong>Téléphone :</strong> <?= htmlspecialchars($commande['telephone'] ?? 'Non renseigné') ?></p>
-                            </div>
-                        </div>
-
-                        <div class="card mb-4">
-                            <div class="card-header">
-                                <h5 class="mb-0">Livraison</h5>
-                            </div>
-                            <div class="card-body">
-                                <p class="mb-0"><?= nl2br(htmlspecialchars($commande['adresse_livraison'])) ?></p>
-                            </div>
-                        </div>
-
-                        <div class="card">
-                            <div class="card-header">
-                                <h5 class="mb-0">Statut</h5>
-                            </div>
-                            <div class="card-body">
-                                <p class="mb-2"><strong>Date :</strong> <?= date('d/m/Y H:i', strtotime($commande['date_commande'])) ?></p>
-                                <form method="POST" action="commandes.php">
-                                    <input type="hidden" name="commande_id" value="<?= $commande['id'] ?>">
-                                    <input type="hidden" name="update_status" value="1">
-                                    <select name="statut" class="form-select mb-2">
-                                        <option value="en_attente" <?= $commande['statut'] == 'en_attente' ? 'selected' : '' ?>>En attente</option>
-                                        <option value="validee" <?= $commande['statut'] == 'validee' ? 'selected' : '' ?>>Validée</option>
-                                        <option value="expediee" <?= $commande['statut'] == 'expediee' ? 'selected' : '' ?>>Expédiée</option>
-                                        <option value="livree" <?= $commande['statut'] == 'livree' ? 'selected' : '' ?>>Livrée</option>
-                                        <option value="annulee" <?= $commande['statut'] == 'annulee' ? 'selected' : '' ?>>Annulée</option>
-                                    </select>
-                                    <button type="submit" class="btn btn-primary w-100">Mettre à jour</button>
-                                </form>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            </div>
+        <div class="admin-card fade-in" style="margin-top:2rem;">
+            <h3><i class="bi bi-list-ul"></i> Articles commandés</h3>
+            <table class="admin-table">
+                <thead>
+                    <tr>
+                        <th>Image</th>
+                        <th>Article</th>
+                        <th>Prix unitaire</th>
+                        <th>Quantité</th>
+                        <th>Total</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <?php foreach ($details as $item): ?>
+                        <tr>
+                            <td>
+                                <?php if ($item['image']): ?>
+                                    <img src="<?= SITE_URL ?>/uploads/produits/<?= $item['image'] ?>" alt="" style="width:50px;height:50px;object-fit:cover;border-radius:8px;">
+                                <?php else: ?>
+                                    <div style="width:50px;height:50px;background:#f5f5f7;border-radius:8px;"></div>
+                                <?php endif; ?>
+                            </td>
+                            <td><strong><?= sanitize($item['nom']) ?></strong></td>
+                            <td><?= formatPrice($item['prix_unitaire']) ?></td>
+                            <td><?= $item['quantite'] ?></td>
+                            <td><strong><?= formatPrice($item['prix_unitaire'] * $item['quantite']) ?></strong></td>
+                        </tr>
+                    <?php endforeach; ?>
+                </tbody>
+                <tfoot>
+                    <tr>
+                        <td colspan="4" style="text-align:right;"><strong>Total</strong></td>
+                        <td><strong><?= formatPrice($facture['total']) ?></strong></td>
+                    </tr>
+                </tfoot>
+            </table>
         </div>
-    </div>
+    </main>
+</div>
 
-    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
-</body>
-</html>
+<?php require_once '../includes/footer.php'; ?>

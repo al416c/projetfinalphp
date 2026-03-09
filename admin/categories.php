@@ -5,99 +5,124 @@ if (!isAdmin()) {
     redirect('../connexion.php');
 }
 
-$pageTitle = 'Gestion des catégories - ' . SITE_NAME;
+$pageTitle = 'Gestion des catégories';
 
+// Delete
 if (isset($_GET['delete'])) {
-    $stmt = $pdo->prepare("DELETE FROM categories WHERE id = ?");
-    $stmt->execute([$_GET['delete']]);
+    $id = (int) $_GET['delete'];
+    // Check if category has articles
+    $stmt = $pdo->prepare("SELECT COUNT(*) FROM articles WHERE categorie_id = ?");
+    $stmt->execute([$id]);
+    if ($stmt->fetchColumn() > 0) {
+        setFlash('error', 'Impossible de supprimer : cette catégorie contient des articles.');
+    } else {
+        // Delete image
+        $stmt = $pdo->prepare("SELECT image FROM categories WHERE id = ?");
+        $stmt->execute([$id]);
+        $cat = $stmt->fetch();
+        if ($cat && $cat['image']) {
+            $imgPath = UPLOAD_DIR . 'categories/' . $cat['image'];
+            if (file_exists($imgPath)) unlink($imgPath);
+        }
+        $pdo->prepare("DELETE FROM categories WHERE id = ?")->execute([$id]);
+        setFlash('success', 'Catégorie supprimée.');
+    }
     redirect('categories.php');
 }
 
-$stmt = $pdo->query("SELECT c.*, COUNT(p.id) as nb_produits FROM categories c LEFT JOIN produits p ON c.id = p.categorie_id GROUP BY c.id ORDER BY c.nom");
-$categories = $stmt->fetchAll();
+$categories = $pdo->query("
+    SELECT c.*, (SELECT COUNT(*) FROM articles WHERE categorie_id = c.id) AS article_count
+    FROM categories c
+    ORDER BY c.nom
+")->fetchAll();
+
+require_once '../includes/header.php';
 ?>
-<!DOCTYPE html>
-<html lang="fr">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title><?= $pageTitle ?></title>
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
-    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
-    <link href="<?= SITE_URL ?>/assets/css/style.css" rel="stylesheet">
-</head>
-<body>
-    <nav class="navbar navbar-expand-lg navbar-dark bg-dark">
-        <div class="container-fluid">
-            <a class="navbar-brand" href="<?= SITE_URL ?>/admin/">
-                <i class="fas fa-cog"></i> Admin - <?= SITE_NAME ?>
+
+<div class="admin-layout">
+    <aside class="admin-sidebar">
+        <div class="admin-sidebar-header">
+            <h3><i class="bi bi-gear-fill"></i> Admin</h3>
+        </div>
+        <nav class="admin-nav">
+            <a href="<?= SITE_URL ?>/admin/index.php" class="admin-nav-link">
+                <i class="bi bi-speedometer2"></i> Tableau de bord
             </a>
-            <div class="navbar-nav ms-auto">
-                <a class="nav-link" href="<?= SITE_URL ?>"><i class="fas fa-external-link-alt"></i> Voir le site</a>
-                <a class="nav-link" href="<?= SITE_URL ?>/deconnexion.php"><i class="fas fa-sign-out-alt"></i> Déconnexion</a>
-            </div>
+            <a href="<?= SITE_URL ?>/admin/produits.php" class="admin-nav-link">
+                <i class="bi bi-box-seam"></i> Articles
+            </a>
+            <a href="<?= SITE_URL ?>/admin/categories.php" class="admin-nav-link active">
+                <i class="bi bi-grid"></i> Catégories
+            </a>
+            <a href="<?= SITE_URL ?>/admin/commandes.php" class="admin-nav-link">
+                <i class="bi bi-receipt"></i> Factures
+            </a>
+            <a href="<?= SITE_URL ?>/admin/utilisateurs.php" class="admin-nav-link">
+                <i class="bi bi-people"></i> Utilisateurs
+            </a>
+            <hr>
+            <a href="<?= SITE_URL ?>/index.php" class="admin-nav-link">
+                <i class="bi bi-arrow-left"></i> Retour au site
+            </a>
+        </nav>
+    </aside>
+
+    <main class="admin-main">
+        <div class="admin-header">
+            <h1>Catégories</h1>
+            <a href="<?= SITE_URL ?>/admin/categorie-form.php" class="btn btn-primary">
+                <i class="bi bi-plus-lg"></i> Nouvelle catégorie
+            </a>
         </div>
-    </nav>
 
-    <div class="container-fluid">
-        <div class="row">
-            <div class="col-md-2 admin-sidebar py-3">
-                <nav class="nav flex-column">
-                    <a class="nav-link" href="index.php"><i class="fas fa-tachometer-alt me-2"></i>Tableau de bord</a>
-                    <a class="nav-link" href="produits.php"><i class="fas fa-box me-2"></i>Produits</a>
-                    <a class="nav-link active" href="categories.php"><i class="fas fa-tags me-2"></i>Catégories</a>
-                    <a class="nav-link" href="commandes.php"><i class="fas fa-shopping-cart me-2"></i>Commandes</a>
-                    <a class="nav-link" href="utilisateurs.php"><i class="fas fa-users me-2"></i>Utilisateurs</a>
-                </nav>
-            </div>
+        <div class="admin-card fade-in">
+            <table class="admin-table">
+                <thead>
+                    <tr>
+                        <th>Image</th>
+                        <th>Nom</th>
+                        <th>Description</th>
+                        <th>Articles</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <?php foreach ($categories as $cat): ?>
+                        <tr>
+                            <td>
+                                <?php if ($cat['image']): ?>
+                                    <img src="<?= SITE_URL ?>/uploads/categories/<?= $cat['image'] ?>" alt="" style="width:50px;height:50px;object-fit:cover;border-radius:8px;">
+                                <?php else: ?>
+                                    <div style="width:50px;height:50px;background:#f5f5f7;border-radius:8px;display:flex;align-items:center;justify-content:center;">
+                                        <i class="bi bi-grid" style="color:#86868b;"></i>
+                                    </div>
+                                <?php endif; ?>
+                            </td>
+                            <td><strong><?= sanitize($cat['nom']) ?></strong></td>
+                            <td><?= sanitize(substr($cat['description'] ?? '', 0, 80)) ?>...</td>
+                            <td>
+                                <span class="badge badge-default"><?= $cat['article_count'] ?></span>
+                            </td>
+                            <td>
+                                <div style="display:flex;gap:0.5rem;">
+                                    <a href="<?= SITE_URL ?>/admin/categorie-form.php?id=<?= $cat['id'] ?>" class="btn-small" title="Modifier">
+                                        <i class="bi bi-pencil"></i>
+                                    </a>
+                                    <a href="<?= SITE_URL ?>/admin/categories.php?delete=<?= $cat['id'] ?>" class="btn-small btn-danger" onclick="return confirm('Supprimer cette catégorie ?')" title="Supprimer">
+                                        <i class="bi bi-trash"></i>
+                                    </a>
+                                </div>
+                            </td>
+                        </tr>
+                    <?php endforeach; ?>
+                </tbody>
+            </table>
 
-            <div class="col-md-10 py-4">
-                <div class="d-flex justify-content-between align-items-center mb-4">
-                    <h1>Gestion des catégories</h1>
-                    <a href="categorie-form.php" class="btn btn-primary"><i class="fas fa-plus"></i> Ajouter une catégorie</a>
-                </div>
-
-                <div class="card">
-                    <div class="card-body">
-                        <div class="table-responsive">
-                            <table class="table table-hover">
-                                <thead class="table-dark">
-                                    <tr>
-                                        <th>Image</th>
-                                        <th>Nom</th>
-                                        <th>Description</th>
-                                        <th>Nb produits</th>
-                                        <th>Actions</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    <?php foreach ($categories as $cat): ?>
-                                    <tr>
-                                        <td>
-                                            <?php if ($cat['image']): ?>
-                                                <img src="<?= SITE_URL ?>/uploads/categories/<?= $cat['image'] ?>" width="50" height="50" style="object-fit:cover;" class="rounded">
-                                            <?php else: ?>
-                                                <div class="img-placeholder rounded" style="width:50px;height:50px;"><i class="fas fa-image"></i></div>
-                                            <?php endif; ?>
-                                        </td>
-                                        <td><?= htmlspecialchars($cat['nom']) ?></td>
-                                        <td><?= htmlspecialchars(substr($cat['description'] ?? '', 0, 50)) ?>...</td>
-                                        <td><span class="badge bg-primary"><?= $cat['nb_produits'] ?></span></td>
-                                        <td>
-                                            <a href="categorie-form.php?id=<?= $cat['id'] ?>" class="btn btn-sm btn-outline-primary"><i class="fas fa-edit"></i></a>
-                                            <a href="categories.php?delete=<?= $cat['id'] ?>" class="btn btn-sm btn-outline-danger" onclick="return confirm('Supprimer cette catégorie ?')"><i class="fas fa-trash"></i></a>
-                                        </td>
-                                    </tr>
-                                    <?php endforeach; ?>
-                                </tbody>
-                            </table>
-                        </div>
-                    </div>
-                </div>
-            </div>
+            <?php if (empty($categories)): ?>
+                <p style="text-align:center;padding:2rem;color:#86868b;">Aucune catégorie.</p>
+            <?php endif; ?>
         </div>
-    </div>
+    </main>
+</div>
 
-    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
-</body>
-</html>
+<?php require_once '../includes/footer.php'; ?>
