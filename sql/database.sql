@@ -126,6 +126,20 @@ CREATE TABLE favoris (
 ) ENGINE=InnoDB;
 
 -- ============================================
+-- Notifications Table (Sales alerts)
+-- ============================================
+CREATE TABLE notifications (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    user_id INT NOT NULL,
+    type VARCHAR(50) NOT NULL DEFAULT 'sale',
+    message TEXT NOT NULL,
+    lien VARCHAR(255) DEFAULT NULL,
+    lu TINYINT(1) DEFAULT 0,
+    date_creation DATETIME DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+) ENGINE=InnoDB;
+
+-- ============================================
 -- SEED DATA
 -- ============================================
 

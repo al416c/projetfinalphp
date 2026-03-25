@@ -1,6 +1,15 @@
 <?php
 $cartCount = getCartCount();
 $flash = getFlash();
+$notifCount = isLoggedIn() ? getUnreadNotificationCount() : 0;
+
+// Fetch recent notifications for dropdown
+$recentNotifs = [];
+if (isLoggedIn()) {
+    $stmtNotif = $pdo->prepare("SELECT * FROM notifications WHERE user_id = ? ORDER BY date_creation DESC LIMIT 8");
+    $stmtNotif->execute([$_SESSION['user_id']]);
+    $recentNotifs = $stmtNotif->fetchAll();
+}
 ?>
 <!DOCTYPE html>
 <html lang="fr">
@@ -43,6 +52,39 @@ $flash = getFlash();
                 </a>
             </li>
             <?php if (isLoggedIn()): ?>
+                <li class="notif-wrapper">
+                    <button class="nav-icon notif-toggle" id="notifBell" aria-label="Notifications">
+                        <i class="bi bi-bell"></i>
+                        <?php if ($notifCount > 0): ?>
+                            <span class="nav-badge notif-badge"><?= $notifCount ?></span>
+                        <?php endif; ?>
+                    </button>
+                    <div class="notif-dropdown" id="notifDropdown">
+                        <div class="notif-header">
+                            <strong>Notifications</strong>
+                            <?php if ($notifCount > 0): ?>
+                                <a href="<?= SITE_URL ?>/ajax/mark_notifications_read.php" class="notif-mark-read" id="markAllRead">Tout marquer lu</a>
+                            <?php endif; ?>
+                        </div>
+                        <div class="notif-list">
+                            <?php if (empty($recentNotifs)): ?>
+                                <div class="notif-empty">Aucune notification</div>
+                            <?php else: ?>
+                                <?php foreach ($recentNotifs as $notif): ?>
+                                    <a href="<?= $notif['lien'] ? SITE_URL . '/' . $notif['lien'] : '#' ?>" class="notif-item <?= !$notif['lu'] ? 'unread' : '' ?>">
+                                        <div class="notif-icon">
+                                            <i class="bi <?= $notif['type'] === 'sale' ? 'bi-cash-coin' : 'bi-bell' ?>"></i>
+                                        </div>
+                                        <div class="notif-content">
+                                            <p><?= sanitize($notif['message']) ?></p>
+                                            <span class="notif-time"><?= timeAgo($notif['date_creation']) ?></span>
+                                        </div>
+                                    </a>
+                                <?php endforeach; ?>
+                            <?php endif; ?>
+                        </div>
+                    </div>
+                </li>
                 <li>
                     <a href="<?= SITE_URL ?>/compte.php" class="nav-icon" title="<?= sanitize($_SESSION['username']) ?>">
                         <i class="bi bi-person-circle"></i>
@@ -51,8 +93,18 @@ $flash = getFlash();
                 <?php if (isAdmin()): ?>
                     <li><a href="<?= SITE_URL ?>/admin/" class="nav-icon"><i class="bi bi-gear"></i></a></li>
                 <?php endif; ?>
+                <li>
+                    <button class="dark-mode-toggle nav-icon" id="darkModeToggle" title="Mode sombre">
+                        <i class="bi bi-moon"></i>
+                    </button>
+                </li>
                 <li><a href="<?= SITE_URL ?>/deconnexion.php" class="nav-icon"><i class="bi bi-box-arrow-right"></i></a></li>
             <?php else: ?>
+                <li>
+                    <button class="dark-mode-toggle nav-icon" id="darkModeToggle" title="Mode sombre">
+                        <i class="bi bi-moon"></i>
+                    </button>
+                </li>
                 <li><a href="<?= SITE_URL ?>/connexion.php">Connexion</a></li>
             <?php endif; ?>
         </ul>

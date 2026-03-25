@@ -135,7 +135,7 @@ require_once 'includes/header.php';
             <?php endif; ?>
 
             <!-- Seller info -->
-            <div class="seller-info" style="margin-top: 20px;">
+            <a href="<?= SITE_URL ?>/profil.php?id=<?= $article['auteur_id'] ?>" class="seller-info seller-info-link" style="margin-top: 20px; text-decoration: none; color: inherit;">
                 <div style="width: 40px; height: 40px; border-radius: 50%; background: var(--gradient-1); display: flex; align-items: center; justify-content: center; color: white; font-weight: 600; font-size: 16px; flex-shrink: 0;">
                     <?= strtoupper(substr($article['auteur_nom'], 0, 1)) ?>
                 </div>
@@ -143,7 +143,8 @@ require_once 'includes/header.php';
                     <strong style="font-size: 15px;"><?= sanitize($article['auteur_nom']) ?></strong>
                     <p class="caption">Vendeur · Publié <?= timeAgo($article['date_publication']) ?></p>
                 </div>
-            </div>
+                <i class="bi bi-chevron-right" style="margin-left: auto; opacity: .4;"></i>
+            </a>
 
             <!-- Actions -->
             <?php if ($article['stock'] > 0): ?>

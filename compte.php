@@ -298,23 +298,46 @@ require_once 'includes/header.php';
                     <a href="produits.php" class="btn btn-primary">Explorer</a>
                 </div>
             <?php else: ?>
-                <?php foreach ($purchased as $item): ?>
-                <div style="display: flex; align-items: center; gap: 16px; padding: 16px 0; border-bottom: 1px solid rgba(0,0,0,0.06);">
-                    <?php if ($item['image'] && file_exists("uploads/produits/{$item['image']}")): ?>
-                        <img src="uploads/produits/<?= sanitize($item['image']) ?>" alt="" style="width: 60px; height: 60px; border-radius: 12px; object-fit: cover;">
-                    <?php else: ?>
-                        <div style="width: 60px; height: 60px; background: var(--bg-secondary); border-radius: 12px; display: flex; align-items: center; justify-content: center;">
-                            <i class="bi bi-box-seam" style="color: var(--text-tertiary);"></i>
+                <?php
+                // Group purchases by date for timeline
+                $groupedPurchases = [];
+                foreach ($purchased as $item) {
+                    $dateKey = date('Y-m-d', strtotime($item['date_transaction']));
+                    $groupedPurchases[$dateKey][] = $item;
+                }
+                ?>
+                <div class="order-timeline">
+                    <?php foreach ($groupedPurchases as $date => $items): ?>
+                    <div class="timeline-group">
+                        <div class="timeline-date">
+                            <div class="timeline-dot"></div>
+                            <span><?= date('d', strtotime($date)) ?></span>
+                            <span class="timeline-month"><?= strftime('%b %Y', strtotime($date)) ?></span>
                         </div>
-                    <?php endif; ?>
-                    <div style="flex: 1;">
-                        <strong><?= sanitize($item['nom']) ?></strong>
-                        <p class="caption">Qté: <?= $item['quantite'] ?> · <?= date('d/m/Y', strtotime($item['date_transaction'])) ?></p>
+                        <div class="timeline-items">
+                            <?php foreach ($items as $item): ?>
+                            <div class="timeline-item">
+                                <div class="timeline-item-img">
+                                    <?php if ($item['image'] && file_exists("uploads/produits/{$item['image']}")): ?>
+                                        <img src="uploads/produits/<?= sanitize($item['image']) ?>" alt="">
+                                    <?php else: ?>
+                                        <i class="bi bi-box-seam"></i>
+                                    <?php endif; ?>
+                                </div>
+                                <div class="timeline-item-info">
+                                    <strong><?= sanitize($item['nom']) ?></strong>
+                                    <p class="caption">Quantité : <?= $item['quantite'] ?></p>
+                                </div>
+                                <div class="timeline-item-end">
+                                    <span class="timeline-price"><?= formatPrice($item['prix_unitaire'] * $item['quantite']) ?></span>
+                                    <a href="commande-detail.php?id=<?= $item['facture_id'] ?>" class="btn btn-ghost btn-sm" title="Voir la commande"><i class="bi bi-arrow-right"></i></a>
+                                </div>
+                            </div>
+                            <?php endforeach; ?>
+                        </div>
                     </div>
-                    <span style="font-weight: 600;"><?= formatPrice($item['prix_unitaire'] * $item['quantite']) ?></span>
-                    <a href="commande-detail.php?id=<?= $item['facture_id'] ?>" class="btn btn-ghost btn-sm"><i class="bi bi-eye"></i></a>
+                    <?php endforeach; ?>
                 </div>
-                <?php endforeach; ?>
             <?php endif; ?>
 
             <!-- Factures Tab -->

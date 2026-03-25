@@ -61,16 +61,23 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 throw new Exception('Solde insuffisant.');
             }
 
-            // Credit sellers
+            // Credit sellers + notify them
             foreach ($items as $item) {
-                $stmtArticle = $pdo->prepare("SELECT auteur_id FROM articles WHERE id = ?");
+                $stmtArticle = $pdo->prepare("SELECT auteur_id, nom FROM articles WHERE id = ?");
                 $stmtArticle->execute([$item['article_id']]);
-                $auteurId = $stmtArticle->fetchColumn();
+                $articleInfo = $stmtArticle->fetch();
 
-                if ($auteurId) {
+                if ($articleInfo && $articleInfo['auteur_id']) {
                     $itemTotal = $item['prix'] * $item['quantite'];
                     $stmtCredit = $pdo->prepare("UPDATE users SET balance = balance + ? WHERE id = ?");
-                    $stmtCredit->execute([$itemTotal, $auteurId]);
+                    $stmtCredit->execute([$itemTotal, $articleInfo['auteur_id']]);
+
+                    // Notify seller
+                    if ($articleInfo['auteur_id'] != $_SESSION['user_id']) {
+                        $buyerName = $_SESSION['username'];
+                        $msg = $buyerName . ' a acheté ' . $item['quantite'] . 'x "' . $articleInfo['nom'] . '" pour ' . number_format($itemTotal, 2, ',', ' ') . ' €';
+                        createNotification($articleInfo['auteur_id'], $msg, 'produit.php?id=' . $item['article_id'], 'sale');
+                    }
                 }
             }
 

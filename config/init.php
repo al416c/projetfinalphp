@@ -107,6 +107,22 @@ function renderStars(float $rating): string {
     return $html;
 }
 
+// ── Notifications ────────────────────────────────────
+
+function getUnreadNotificationCount(): int {
+    global $pdo;
+    if (!isLoggedIn()) return 0;
+    $stmt = $pdo->prepare("SELECT COUNT(*) FROM notifications WHERE user_id = ? AND lu = 0");
+    $stmt->execute([$_SESSION['user_id']]);
+    return (int) $stmt->fetchColumn();
+}
+
+function createNotification(int $userId, string $message, string $lien = null, string $type = 'sale'): void {
+    global $pdo;
+    $stmt = $pdo->prepare("INSERT INTO notifications (user_id, type, message, lien) VALUES (?, ?, ?, ?)");
+    $stmt->execute([$userId, $type, $message, $lien]);
+}
+
 // ── Flash messages ───────────────────────────────────
 
 function setFlash(string $type, string $message): void {

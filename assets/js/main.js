@@ -249,6 +249,80 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     });
 
+    // ── Dark Mode Toggle ──────────────────────────────────
+    const darkToggle = document.getElementById('darkModeToggle');
+    const htmlEl = document.documentElement;
+    
+    // Load saved preference
+    const savedTheme = localStorage.getItem('nova-theme');
+    if (savedTheme === 'dark') {
+        htmlEl.setAttribute('data-theme', 'dark');
+        if (darkToggle) {
+            const icon = darkToggle.querySelector('i');
+            if (icon) { icon.className = 'bi bi-sun'; }
+        }
+    }
+    
+    if (darkToggle) {
+        darkToggle.addEventListener('click', function() {
+            const isDark = htmlEl.getAttribute('data-theme') === 'dark';
+            const icon = darkToggle.querySelector('i');
+            
+            if (isDark) {
+                htmlEl.removeAttribute('data-theme');
+                localStorage.setItem('nova-theme', 'light');
+                if (icon) icon.className = 'bi bi-moon';
+            } else {
+                htmlEl.setAttribute('data-theme', 'dark');
+                localStorage.setItem('nova-theme', 'dark');
+                if (icon) icon.className = 'bi bi-sun';
+            }
+        });
+    }
+
+    // ── Notification Dropdown ─────────────────────────────
+    const bell = document.getElementById('notifBell');
+    const dropdown = document.getElementById('notifDropdown');
+    
+    if (bell && dropdown) {
+        bell.addEventListener('click', function(e) {
+            e.preventDefault();
+            e.stopPropagation();
+            dropdown.classList.toggle('show');
+        });
+        
+        // Close on outside click
+        document.addEventListener('click', function(e) {
+            if (!dropdown.contains(e.target) && e.target !== bell && !bell.contains(e.target)) {
+                dropdown.classList.remove('show');
+            }
+        });
+        
+        // Mark all read
+        const markReadBtn = document.getElementById('markAllRead');
+        if (markReadBtn) {
+            markReadBtn.addEventListener('click', function(e) {
+                e.preventDefault();
+                fetch(this.getAttribute('href'), {
+                    headers: { 'X-Requested-With': 'XMLHttpRequest' }
+                })
+                .then(r => r.json())
+                .then(data => {
+                    if (data.success) {
+                        // Remove badge
+                        const badge = bell.querySelector('.notif-badge');
+                        if (badge) badge.remove();
+                        // Remove unread styling
+                        dropdown.querySelectorAll('.notif-item.unread').forEach(el => {
+                            el.classList.remove('unread');
+                        });
+                    }
+                })
+                .catch(() => {});
+            });
+        }
+    }
+
 });
 
 // ── CSS for spinner ────────────────────────────────────

@@ -218,7 +218,8 @@ a:hover {
     gap: 28px;
     list-style: none;
 }
-.nav-links a {
+.nav-links a,
+.nav-links button {
     font-size: 12px;
     font-weight: 400;
     color: rgba(245, 245, 247, 0.8);
@@ -226,7 +227,15 @@ a:hover {
     transition: color 0.3s;
     letter-spacing: 0.01em;
 }
-.nav-links a:hover {
+.nav-links button {
+    background: none;
+    border: none;
+    cursor: pointer;
+    padding: 0;
+    font-family: inherit;
+}
+.nav-links a:hover,
+.nav-links button:hover {
     color: #f5f5f7;
 }
 .nav-links .nav-icon {
@@ -1687,7 +1696,8 @@ select.form-control {
     .nav-links.open {
         display: flex;
     }
-    .nav-links a {
+    .nav-links a,
+    .nav-links button {
         font-size: 17px;
         padding: 12px 0;
         border-bottom: 1px solid rgba(255, 255, 255, 0.06);
@@ -1842,4 +1852,475 @@ select.form-control {
 }
 .tab-content.active {
     display: block;
+}
+
+/* ============================================
+   NOTIFICATIONS DROPDOWN
+   ============================================ */
+.notif-wrapper {
+    position: relative;
+}
+.notif-badge {
+    position: absolute;
+    top: -6px;
+    right: -6px;
+    background: var(--danger);
+    color: #fff;
+    font-size: 10px;
+    font-weight: 700;
+    width: 18px;
+    height: 18px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    line-height: 1;
+    pointer-events: none;
+}
+.notif-dropdown {
+    display: none;
+    position: absolute;
+    top: calc(100% + 12px);
+    right: -12px;
+    width: 360px;
+    max-height: 420px;
+    background: var(--bg-card);
+    border-radius: var(--radius-md);
+    box-shadow: var(--shadow-xl);
+    border: 1px solid rgba(0,0,0,0.08);
+    z-index: 1000;
+    overflow: hidden;
+    animation: dropdownSlide 0.2s ease;
+}
+.notif-dropdown.show {
+    display: block;
+}
+@keyframes dropdownSlide {
+    from { opacity: 0; transform: translateY(-8px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+.notif-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 16px 20px;
+    border-bottom: 1px solid rgba(0,0,0,0.06);
+}
+.notif-header h4 {
+    font-size: 15px;
+    font-weight: 600;
+}
+.notif-header a {
+    font-size: 12px;
+    color: var(--accent);
+    text-decoration: none;
+}
+.notif-header a:hover {
+    text-decoration: underline;
+}
+.notif-list {
+    overflow-y: auto;
+    max-height: 340px;
+}
+.notif-item {
+    display: flex;
+    align-items: flex-start;
+    gap: 12px;
+    padding: 14px 20px;
+    border-bottom: 1px solid rgba(0,0,0,0.04);
+    transition: background 0.15s;
+}
+.notif-item:hover {
+    background: var(--bg-secondary);
+}
+.notif-item.unread {
+    background: var(--accent-light);
+}
+.notif-icon {
+    width: 36px;
+    height: 36px;
+    border-radius: 50%;
+    background: var(--gradient-1);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #fff;
+    font-size: 16px;
+    flex-shrink: 0;
+}
+.notif-icon.sale { background: var(--gradient-3); }
+.notif-icon.info { background: var(--gradient-2); }
+.notif-content {
+    flex: 1;
+    min-width: 0;
+}
+.notif-content p {
+    font-size: 13px;
+    line-height: 1.4;
+    color: var(--text-primary);
+}
+.notif-content .notif-time {
+    font-size: 11px;
+    color: var(--text-tertiary);
+    margin-top: 2px;
+}
+.notif-empty {
+    text-align: center;
+    padding: 40px 20px;
+    color: var(--text-tertiary);
+    font-size: 14px;
+}
+
+/* ============================================
+   STOCK BADGES (Card Overlays)
+   ============================================ */
+.stock-badge {
+    position: absolute;
+    top: 12px;
+    left: 12px;
+    padding: 4px 10px;
+    border-radius: var(--radius-full);
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.02em;
+    z-index: 2;
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
+}
+.stock-out {
+    background: rgba(255, 69, 58, 0.85);
+    color: #fff;
+}
+.stock-low {
+    background: rgba(255, 159, 10, 0.85);
+    color: #fff;
+}
+.stock-ok {
+    background: rgba(48, 209, 88, 0.85);
+    color: #fff;
+}
+@keyframes pulseBadge {
+    0%, 100% { transform: scale(1); }
+    50% { transform: scale(1.05); }
+}
+.pulse-badge {
+    animation: pulseBadge 2s ease-in-out infinite;
+}
+
+/* ============================================
+   ORDER HISTORY TIMELINE
+   ============================================ */
+.order-timeline {
+    position: relative;
+    padding-left: 0;
+    margin-top: 24px;
+}
+.timeline-group {
+    display: flex;
+    gap: 24px;
+    margin-bottom: 32px;
+}
+.timeline-date {
+    flex-shrink: 0;
+    width: 60px;
+    text-align: center;
+    position: relative;
+}
+.timeline-date span:first-of-type {
+    display: block;
+    font-size: 28px;
+    font-weight: 700;
+    color: var(--text-primary);
+    line-height: 1;
+}
+.timeline-month {
+    display: block;
+    font-size: 11px;
+    color: var(--text-tertiary);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    margin-top: 2px;
+}
+.timeline-dot {
+    width: 10px;
+    height: 10px;
+    background: var(--accent);
+    border-radius: 50%;
+    margin: 0 auto 8px;
+    position: relative;
+}
+.timeline-dot::after {
+    content: '';
+    position: absolute;
+    left: 50%;
+    top: 100%;
+    transform: translateX(-50%);
+    width: 2px;
+    height: calc(100% + 40px);
+    background: rgba(0,0,0,0.08);
+}
+.timeline-group:last-child .timeline-dot::after {
+    display: none;
+}
+.timeline-items {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+.timeline-item {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    padding: 14px 18px;
+    background: var(--bg-card);
+    border: 1px solid rgba(0,0,0,0.06);
+    border-radius: var(--radius-sm);
+    transition: all 0.2s ease;
+}
+.timeline-item:hover {
+    box-shadow: var(--shadow-md);
+    transform: translateY(-1px);
+}
+.timeline-item-img {
+    width: 50px;
+    height: 50px;
+    border-radius: 10px;
+    overflow: hidden;
+    flex-shrink: 0;
+    background: var(--bg-secondary);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+.timeline-item-img img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+.timeline-item-img i {
+    font-size: 20px;
+    color: var(--text-tertiary);
+}
+.timeline-item-info {
+    flex: 1;
+    min-width: 0;
+}
+.timeline-item-info strong {
+    font-size: 14px;
+    display: block;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+.timeline-item-end {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    flex-shrink: 0;
+}
+.timeline-price {
+    font-weight: 600;
+    font-size: 15px;
+    color: var(--text-primary);
+}
+@media (max-width: 600px) {
+    .timeline-group { flex-direction: column; gap: 12px; }
+    .timeline-date { display: flex; align-items: center; gap: 12px; width: auto; }
+    .timeline-dot { margin: 0; }
+    .timeline-dot::after { display: none; }
+}
+
+/* ============================================
+   SELLER PROFILE PAGE
+   ============================================ */
+.seller-profile-card {
+    background: var(--bg-card);
+    border-radius: var(--radius-lg);
+    padding: 40px;
+    box-shadow: var(--shadow-md);
+    border: 1px solid rgba(0,0,0,0.06);
+    max-width: 700px;
+    margin: 0 auto;
+}
+.seller-profile-header {
+    display: flex;
+    align-items: center;
+    gap: 24px;
+    margin-bottom: 32px;
+}
+.seller-avatar-large {
+    width: 80px;
+    height: 80px;
+    border-radius: 50%;
+    background: var(--gradient-1);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: white;
+    font-weight: 700;
+    font-size: 32px;
+    flex-shrink: 0;
+}
+.seller-stats-grid {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 16px;
+    text-align: center;
+}
+.seller-stat-item {
+    padding: 16px 8px;
+    background: var(--bg-secondary);
+    border-radius: var(--radius-sm);
+}
+.seller-stat-number {
+    display: block;
+    font-size: 22px;
+    font-weight: 700;
+    color: var(--text-primary);
+    margin-bottom: 4px;
+}
+.seller-stat-label {
+    font-size: 12px;
+    color: var(--text-tertiary);
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+}
+.seller-info-link {
+    transition: background 0.2s;
+    padding: 12px !important;
+    border-radius: var(--radius-sm) !important;
+}
+.seller-info-link:hover {
+    background: var(--bg-secondary);
+}
+@media (max-width: 600px) {
+    .seller-profile-card { padding: 24px; }
+    .seller-stats-grid { grid-template-columns: repeat(2, 1fr); }
+    .seller-profile-header { flex-direction: column; text-align: center; }
+}
+
+/* ============================================
+   DARK MODE TOGGLE
+   ============================================ */
+.dark-mode-toggle {
+    background: none;
+    border: none;
+    cursor: pointer;
+    color: inherit;
+    font-size: inherit;
+    padding: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: transform 0.3s ease;
+}
+.dark-mode-toggle:hover {
+    transform: rotate(20deg);
+}
+
+/* ============================================
+   DARK MODE THEME
+   ============================================ */
+[data-theme="dark"] {
+    --bg-primary: #000000;
+    --bg-secondary: #1c1c1e;
+    --bg-dark: #000000;
+    --bg-card: #1c1c1e;
+    --bg-glass: rgba(28, 28, 30, 0.8);
+
+    --text-primary: #f5f5f7;
+    --text-secondary: #a1a1a6;
+    --text-tertiary: #6e6e73;
+    --text-inverse: #1d1d1f;
+
+    --accent: #2997ff;
+    --accent-hover: #40a9ff;
+    --accent-light: rgba(41, 151, 255, 0.12);
+
+    --shadow-sm: 0 2px 8px rgba(0, 0, 0, 0.3);
+    --shadow-md: 0 4px 20px rgba(0, 0, 0, 0.4);
+    --shadow-lg: 0 12px 40px rgba(0, 0, 0, 0.5);
+    --shadow-xl: 0 20px 60px rgba(0, 0, 0, 0.6);
+}
+[data-theme="dark"] body {
+    color: var(--text-primary);
+    background: var(--bg-primary);
+}
+[data-theme="dark"] .nav {
+    background: rgba(0, 0, 0, 0.85);
+    border-bottom-color: rgba(255, 255, 255, 0.08);
+}
+[data-theme="dark"] .nav a,
+[data-theme="dark"] .nav .nav-icon {
+    color: var(--text-primary);
+}
+[data-theme="dark"] .card {
+    border-color: rgba(255, 255, 255, 0.08);
+}
+[data-theme="dark"] .form-input,
+[data-theme="dark"] .form-textarea,
+[data-theme="dark"] .form-select,
+[data-theme="dark"] select,
+[data-theme="dark"] input[type="text"],
+[data-theme="dark"] input[type="email"],
+[data-theme="dark"] input[type="password"],
+[data-theme="dark"] input[type="number"],
+[data-theme="dark"] input[type="search"],
+[data-theme="dark"] textarea {
+    background: var(--bg-secondary);
+    border-color: rgba(255, 255, 255, 0.1);
+    color: var(--text-primary);
+}
+[data-theme="dark"] .filter-select {
+    background: var(--bg-secondary);
+    border-color: rgba(255, 255, 255, 0.1);
+    color: var(--text-primary);
+}
+[data-theme="dark"] .flash {
+    border-color: rgba(255, 255, 255, 0.1);
+}
+[data-theme="dark"] .footer {
+    background: #000;
+    border-top-color: rgba(255, 255, 255, 0.06);
+}
+[data-theme="dark"] .timeline-item {
+    border-color: rgba(255, 255, 255, 0.08);
+}
+[data-theme="dark"] .timeline-dot::after {
+    background: rgba(255, 255, 255, 0.1);
+}
+[data-theme="dark"] .notif-dropdown {
+    border-color: rgba(255, 255, 255, 0.1);
+}
+[data-theme="dark"] .notif-item:hover {
+    background: rgba(255, 255, 255, 0.05);
+}
+[data-theme="dark"] .notif-header {
+    border-bottom-color: rgba(255, 255, 255, 0.08);
+}
+[data-theme="dark"] .notif-item {
+    border-bottom-color: rgba(255, 255, 255, 0.04);
+}
+[data-theme="dark"] .seller-profile-card {
+    border-color: rgba(255, 255, 255, 0.08);
+}
+[data-theme="dark"] .hero {
+    background: var(--gradient-hero);
+}
+[data-theme="dark"] .btn-ghost {
+    color: var(--text-primary);
+    border-color: rgba(255, 255, 255, 0.2);
+}
+[data-theme="dark"] .btn-ghost:hover {
+    background: rgba(255, 255, 255, 0.08);
+}
+[data-theme="dark"] .tab {
+    color: var(--text-secondary);
+}
+[data-theme="dark"] .tab:hover {
+    color: var(--text-primary);
+}
+[data-theme="dark"] .dark-mode-toggle {
+    color: var(--text-primary);
 }

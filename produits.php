@@ -105,13 +105,18 @@ require_once 'includes/header.php';
     <?php else: ?>
         <div class="product-grid stagger-children">
             <?php foreach ($articles as $article): ?>
-            <a href="produit.php?id=<?= $article['id'] ?>" class="card" style="text-decoration: none; color: inherit;">
+            <a href="produit.php?id=<?= $article['id'] ?>" class="card" style="text-decoration: none; color: inherit; position: relative;">
                 <?php if ($article['image'] && file_exists("uploads/produits/{$article['image']}")): ?>
                     <img src="uploads/produits/<?= sanitize($article['image']) ?>" alt="<?= sanitize($article['nom']) ?>" class="card-img">
                 <?php else: ?>
                     <div class="card-img" style="display: flex; align-items: center; justify-content: center; background: var(--bg-secondary);">
                         <i class="bi bi-box-seam" style="font-size: 40px; color: var(--text-tertiary);"></i>
                     </div>
+                <?php endif; ?>
+                <?php if ($article['stock'] <= 0): ?>
+                    <span class="stock-badge stock-out">Rupture</span>
+                <?php elseif ($article['stock'] <= 5): ?>
+                    <span class="stock-badge stock-low pulse-badge">Plus que <?= $article['stock'] ?></span>
                 <?php endif; ?>
                 <div class="card-body">
                     <p class="eyebrow"><?= sanitize($article['categorie_nom'] ?? 'Article') ?></p>

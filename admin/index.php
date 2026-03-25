@@ -12,7 +12,7 @@ $stats = [];
 $stats['users'] = $pdo->query("SELECT COUNT(*) FROM users")->fetchColumn();
 $stats['articles'] = $pdo->query("SELECT COUNT(*) FROM articles")->fetchColumn();
 $stats['factures'] = $pdo->query("SELECT COUNT(*) FROM factures")->fetchColumn();
-$stats['revenue'] = $pdo->query("SELECT COALESCE(SUM(total), 0) FROM factures")->fetchColumn();
+$stats['revenue'] = $pdo->query("SELECT COALESCE(SUM(montant), 0) FROM factures")->fetchColumn();
 
 // Recent orders
 $recentOrders = $pdo->query("
