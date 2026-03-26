@@ -5,7 +5,16 @@ require_once __DIR__ . '/database.php';
 
 // ── Site config ──────────────────────────────────────
 define('SITE_NAME', 'NOVA');
-define('SITE_URL', 'http://localhost:8888/projetfinalphp'); // MAMP default port
+
+$scheme = 'http';
+if (!empty($_SERVER['HTTP_X_FORWARDED_PROTO'])) {
+    $scheme = $_SERVER['HTTP_X_FORWARDED_PROTO'];
+} elseif (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') {
+    $scheme = 'https';
+}
+
+$host = $_SERVER['HTTP_HOST'] ?? 'localhost:8888';
+define('SITE_URL', $scheme . '://' . $host . '/projetfinalphp');
 define('UPLOAD_DIR', __DIR__ . '/../uploads/');
 
 // ── Helper functions ─────────────────────────────────

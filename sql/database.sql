@@ -1,6 +1,5 @@
 -- ============================================
--- NOVA Marketplace - Database Schema
--- Premium Tech Marketplace
+-- database nova
 -- ============================================
 
 DROP DATABASE IF EXISTS nova_db;
@@ -8,7 +7,7 @@ CREATE DATABASE nova_db CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 USE nova_db;
 
 -- ============================================
--- Users Table
+-- table
 -- ============================================
 CREATE TABLE users (
     id INT AUTO_INCREMENT PRIMARY KEY,
@@ -22,7 +21,7 @@ CREATE TABLE users (
 ) ENGINE=InnoDB;
 
 -- ============================================
--- Categories Table
+-- caté table
 -- ============================================
 CREATE TABLE categories (
     id INT AUTO_INCREMENT PRIMARY KEY,
@@ -32,7 +31,7 @@ CREATE TABLE categories (
 ) ENGINE=InnoDB;
 
 -- ============================================
--- Articles Table (Products listed by users)
+-- article table
 -- ============================================
 CREATE TABLE articles (
     id INT AUTO_INCREMENT PRIMARY KEY,
@@ -48,7 +47,7 @@ CREATE TABLE articles (
 ) ENGINE=InnoDB;
 
 -- ============================================
--- Stock Table (Separate from articles per PDF)
+-- stock table
 -- ============================================
 CREATE TABLE stock (
     id INT AUTO_INCREMENT PRIMARY KEY,
@@ -58,7 +57,7 @@ CREATE TABLE stock (
 ) ENGINE=InnoDB;
 
 -- ============================================
--- Cart Table
+-- panier table
 -- ============================================
 CREATE TABLE panier (
     id INT AUTO_INCREMENT PRIMARY KEY,
@@ -72,7 +71,7 @@ CREATE TABLE panier (
 ) ENGINE=InnoDB;
 
 -- ============================================
--- Invoices Table (Factures)
+-- facture table
 -- ============================================
 CREATE TABLE factures (
     id INT AUTO_INCREMENT PRIMARY KEY,
@@ -86,7 +85,7 @@ CREATE TABLE factures (
 ) ENGINE=InnoDB;
 
 -- ============================================
--- Invoice Details Table
+-- détail factable
 -- ============================================
 CREATE TABLE facture_details (
     id INT AUTO_INCREMENT PRIMARY KEY,
@@ -99,7 +98,7 @@ CREATE TABLE facture_details (
 ) ENGINE=InnoDB;
 
 -- ============================================
--- Comments / Reviews Table (Bonus)
+-- commentaires
 -- ============================================
 CREATE TABLE commentaires (
     id INT AUTO_INCREMENT PRIMARY KEY,
@@ -113,7 +112,7 @@ CREATE TABLE commentaires (
 ) ENGINE=InnoDB;
 
 -- ============================================
--- Favorites Table (Bonus)
+-- favé
 -- ============================================
 CREATE TABLE favoris (
     id INT AUTO_INCREMENT PRIMARY KEY,
@@ -126,7 +125,7 @@ CREATE TABLE favoris (
 ) ENGINE=InnoDB;
 
 -- ============================================
--- Notifications Table (Sales alerts)
+-- notif
 -- ============================================
 CREATE TABLE notifications (
     id INT AUTO_INCREMENT PRIMARY KEY,
@@ -140,16 +139,16 @@ CREATE TABLE notifications (
 ) ENGINE=InnoDB;
 
 -- ============================================
--- SEED DATA
+-- seed
 -- ============================================
 
--- Admin user (password: password)
+-- Admin user (mdp: password)
 INSERT INTO users (username, email, password, balance, role) VALUES
 ('admin', 'admin@nova.com', '$2y$10$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2.uheWG/igi', 10000.00, 'admin'),
 ('alice_tech', 'alice@nova.com', '$2y$10$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2.uheWG/igi', 2500.00, 'user'),
 ('bob_audio', 'bob@nova.com', '$2y$10$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2.uheWG/igi', 1800.00, 'user');
 
--- Categories
+-- Catégories
 INSERT INTO categories (nom, description, image) VALUES
 ('Audio', 'Casques, enceintes et écouteurs premium', 'audio.jpg'),
 ('Gaming', 'Équipement gaming haute performance', 'gaming.jpg'),
@@ -158,7 +157,7 @@ INSERT INTO categories (nom, description, image) VALUES
 ('Photo & Vidéo', 'Caméras, drones et équipement créatif', 'photo.jpg'),
 ('Wearables', 'Montres et objets portables connectés', 'wearables.jpg');
 
--- Articles (listed by different users)
+-- Articles
 INSERT INTO articles (nom, description, prix, image, categorie_id, auteur_id) VALUES
 ('Nova Pro Headphones', 'Casque sans fil à réduction de bruit active. Son spatial immersif avec drivers 40mm en titane. Autonomie 30h. Design ultra-confortable avec coussinets en mousse à mémoire de forme.', 349.99, 'headphones-pro.jpg', 1, 1),
 ('Pulse Speaker', 'Enceinte Bluetooth portable avec son 360°. Résistante à l''eau IPX7, basses profondes et LED ambiantes synchronisées à la musique. 24h d''autonomie.', 199.99, 'pulse-speaker.jpg', 1, 2),
@@ -181,7 +180,7 @@ INSERT INTO stock (article_id, quantite) VALUES
 (6, 65), (7, 20), (8, 100), (9, 55), (10, 200),
 (11, 15), (12, 40), (13, 30), (14, 90);
 
--- Some reviews
+-- comms
 INSERT INTO commentaires (article_id, user_id, note, commentaire) VALUES
 (1, 2, 5, 'Son incroyable, la réduction de bruit est exceptionnelle. Meilleur casque que j''ai eu.'),
 (1, 3, 4, 'Très bon casque, confortable pour de longues sessions. Le son spatial est bluffant.'),
