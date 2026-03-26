@@ -38,7 +38,7 @@ $articles = $pdo->query("
     LEFT JOIN categories c ON a.categorie_id = c.id
     LEFT JOIN users u ON a.auteur_id = u.id
     LEFT JOIN stock s ON a.id = s.article_id
-    ORDER BY a.date_creation DESC
+        ORDER BY a.date_publication DESC
 ")->fetchAll();
 
 require_once '../includes/header.php';
@@ -115,7 +115,7 @@ require_once '../includes/header.php';
                                     <?= $article['stock'] ?>
                                 </span>
                             </td>
-                            <td><?= date('d/m/Y', strtotime($article['date_creation'])) ?></td>
+                            <td><?= date('d/m/Y', strtotime($article['date_publication'])) ?></td>
                             <td>
                                 <div style="display:flex;gap:0.5rem;">
                                     <a href="<?= SITE_URL ?>/admin/produit-form.php?id=<?= $article['id'] ?>" class="btn-small" title="Modifier">

@@ -83,8 +83,8 @@ require_once '../includes/header.php';
             </div>
             <div class="admin-card">
                 <h3><i class="bi bi-info-circle"></i> Informations</h3>
-                <p>Date : <?= date('d/m/Y à H:i', strtotime($facture['date_facture'])) ?></p>
-                <p>Total : <strong><?= formatPrice($facture['total']) ?></strong></p>
+                <p>Date : <?= date('d/m/Y à H:i', strtotime($facture['date_transaction'])) ?></p>
+                <p>Total : <strong><?= formatPrice($facture['montant']) ?></strong></p>
             </div>
         </div>
 
@@ -120,7 +120,7 @@ require_once '../includes/header.php';
                 <tfoot>
                     <tr>
                         <td colspan="4" style="text-align:right;"><strong>Total</strong></td>
-                        <td><strong><?= formatPrice($facture['total']) ?></strong></td>
+                        <td><strong><?= formatPrice($facture['montant']) ?></strong></td>
                     </tr>
                 </tfoot>
             </table>

@@ -23,8 +23,14 @@ function isAdmin(): bool {
     return isset($_SESSION['user_role']) && $_SESSION['user_role'] === 'admin';
 }
 
+function cleanInput(string $data): string {
+    return strip_tags(trim($data));
+}
+
 function sanitize(string $data): string {
-    return htmlspecialchars(strip_tags(trim($data)), ENT_QUOTES, 'UTF-8');
+    $clean = strip_tags(trim($data));
+    $decoded = html_entity_decode($clean, ENT_QUOTES | ENT_HTML5, 'UTF-8');
+    return htmlspecialchars($decoded, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
 }
 
 function generateToken(): string {
@@ -117,7 +123,7 @@ function getUnreadNotificationCount(): int {
     return (int) $stmt->fetchColumn();
 }
 
-function createNotification(int $userId, string $message, string $lien = null, string $type = 'sale'): void {
+function createNotification(int $userId, string $message, ?string $lien = null, string $type = 'sale'): void {
     global $pdo;
     $stmt = $pdo->prepare("INSERT INTO notifications (user_id, type, message, lien) VALUES (?, ?, ?, ?)");
     $stmt->execute([$userId, $type, $message, $lien]);

@@ -11,7 +11,7 @@ $factures = $pdo->query("
     SELECT f.*, u.username
     FROM factures f
     JOIN users u ON f.user_id = u.id
-    ORDER BY f.date_facture DESC
+        ORDER BY f.date_transaction DESC
 ")->fetchAll();
 
 require_once '../includes/header.php';
@@ -68,8 +68,8 @@ require_once '../includes/header.php';
                             <td><strong>#<?= $facture['id'] ?></strong></td>
                             <td><?= sanitize($facture['username']) ?></td>
                             <td><?= sanitize($facture['adresse']) ?>, <?= sanitize($facture['ville']) ?></td>
-                            <td><strong><?= formatPrice($facture['total']) ?></strong></td>
-                            <td><?= date('d/m/Y H:i', strtotime($facture['date_facture'])) ?></td>
+                            <td><strong><?= formatPrice($facture['montant']) ?></strong></td>
+                            <td><?= date('d/m/Y H:i', strtotime($facture['date_transaction'])) ?></td>
                             <td>
                                 <a href="<?= SITE_URL ?>/admin/commande-detail.php?id=<?= $facture['id'] ?>" class="btn-small">
                                     <i class="bi bi-eye"></i> Voir

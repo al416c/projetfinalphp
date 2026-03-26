@@ -503,6 +503,18 @@ body {
 .category-card:hover img {
     transform: scale(1.05);
 }
+.category-fallback {
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(135deg, #3a3a3c 0%, #1d1d1f 100%);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+.category-fallback i {
+    font-size: 52px;
+    color: rgba(255, 255, 255, 0.45);
+}
 .category-card .category-info {
     position: relative;
     z-index: 2;

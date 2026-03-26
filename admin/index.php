@@ -19,7 +19,7 @@ $recentOrders = $pdo->query("
     SELECT f.*, u.username
     FROM factures f
     JOIN users u ON f.user_id = u.id
-    ORDER BY f.date_facture DESC
+    ORDER BY f.date_transaction DESC
     LIMIT 5
 ")->fetchAll();
 
@@ -125,8 +125,8 @@ require_once '../includes/header.php';
                                 <tr>
                                     <td>#<?= $order['id'] ?></td>
                                     <td><?= sanitize($order['username']) ?></td>
-                                    <td><strong><?= formatPrice($order['total']) ?></strong></td>
-                                    <td><?= date('d/m/Y', strtotime($order['date_facture'])) ?></td>
+                                    <td><strong><?= formatPrice($order['montant']) ?></strong></td>
+                                    <td><?= date('d/m/Y', strtotime($order['date_transaction'])) ?></td>
                                     <td>
                                         <a href="<?= SITE_URL ?>/admin/commande-detail.php?id=<?= $order['id'] ?>" class="btn-small">
                                             Voir
